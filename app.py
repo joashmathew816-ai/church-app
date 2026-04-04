@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from flask import Flask, render_template, request
 from optimizer import optimize_morning
 from models import db, User
@@ -241,5 +240,4 @@ def home():
 
 if __name__ == "__main__":
     # IMPORTANT: allows phone access
->>>>>>> 10fdc30d77c6b753c95dd1cefeb558af46455134
     app.run(debug=True, host="0.0.0.0")
