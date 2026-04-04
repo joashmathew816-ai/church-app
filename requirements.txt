@@ -1,10 +1,4 @@
-<<<<<<< HEAD
-flask
-requests
-ortools
-=======
 flask
 requests
 ortools
 gunicorn
->>>>>>> 10fdc30d77c6b753c95dd1cefeb558af46455134
