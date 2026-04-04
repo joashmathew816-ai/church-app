@@ -11,12 +11,6 @@ class User(db.Model, UserMixin):
 
     address = db.Column(db.String(200))
 
-    is_driver = db.Column(db.Boolean, default=False)
-    capacity = db.Column(db.Integer, default=0)
-
-    coming = db.Column(db.Boolean, default=False)
-    is_returning = db.Column(db.Boolean, default=False)
-
     password = db.Column(db.String(200))
 
-    role = db.Column(db.String(10), default="user")  # user or admin
+    role = db.Column(db.String(20), default="user")  # 🔥 IMPORTANT

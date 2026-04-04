@@ -2,11 +2,7 @@ from flask import Flask, render_template, request, redirect
 from optimizer import optimize_morning
 from models import db, User
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
 
-# --------------------------
-# CREATE APP
-# --------------------------
 app = Flask(__name__)
 
 # --------------------------
@@ -14,6 +10,7 @@ app = Flask(__name__)
 # --------------------------
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SECRET_KEY'] = 'secret123'
+app.config['SESSION_PERMANENT'] = False  # logout when browser closes
 
 # --------------------------
 # INIT DB + LOGIN
@@ -22,20 +19,88 @@ db.init_app(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = "login"
-
+login_manager.login_view = "login"  # force login
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# --------------------------
+# SIGNUP
+# --------------------------
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if request.method == "POST":
+        user = User(
+            first_name=request.form.get("first_name"),
+            last_name=request.form.get("last_name"),
+            address=request.form.get("address"),
+            password=request.form.get("password"),
+            role="user"
+        )
+        db.session.add(user)
+        db.session.commit()
+        return redirect("/login")
+
+    return render_template("signup.html")
 
 # --------------------------
-# HOME (ONLY LOGGED IN USERS)
+# LOGIN (USER)
+# --------------------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        user = User.query.filter_by(first_name=request.form.get("first_name")).first()
+
+        if user and user.password == request.form.get("password"):
+            login_user(user, remember=False)
+
+            if user.role == "admin":
+                return redirect("/admin")
+            else:
+                return redirect("/dashboard")
+
+        return "Invalid login"
+
+    return render_template("login.html")
+
+# --------------------------
+# LOGOUT
+# --------------------------
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect("/login")
+
+# --------------------------
+# USER DASHBOARD
+# --------------------------
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    return render_template("dashboard.html", user=current_user)
+
+# --------------------------
+# ADMIN DASHBOARD
+# --------------------------
+@app.route("/admin")
+@login_required
+def admin():
+    if current_user.role != "admin":
+        return "Access denied"
+
+    return render_template("admin.html", user=current_user)
+
+# --------------------------
+# ROUTE GENERATION (ADMIN ONLY)
 # --------------------------
 @app.route("/", methods=["GET", "POST"])
 @login_required
 def home():
+    if current_user.role != "admin":
+        return redirect("/dashboard")
+
     result = None
 
     if request.method == "POST":
@@ -73,107 +138,17 @@ def home():
             i += 1
 
         church = "114 Lane St, Guelph, ON"
-
         result = optimize_morning(drivers, passengers, church)
 
-    return render_template("index.html", result=result)
-
-
-# --------------------------
-# SIGNUP
-# --------------------------
-@app.route("/signup", methods=["GET", "POST"])
-def signup():
-    if request.method == "POST":
-
-        user = User(
-            first_name=request.form.get("first"),
-            last_name=request.form.get("last"),
-            address=request.form.get("address"),
-            is_driver=("is_driver" in request.form),
-            capacity=int(request.form.get("capacity") or 0),
-            password=generate_password_hash(request.form.get("password")),
-            role="user"
-        )
-
-        db.session.add(user)
-        db.session.commit()
-
-        login_user(user)
-        return redirect("/")
-
-    return render_template("signup.html")
-
+    return render_template("index.html", result=result, user=current_user)
 
 # --------------------------
-# LOGIN
-# --------------------------
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-
-        user = User.query.filter_by(first_name=request.form.get("first")).first()
-
-        if user and check_password_hash(user.password, request.form.get("password")):
-            login_user(user)
-            return redirect("/")
-
-        return "❌ Invalid login"
-
-    return render_template("login.html")
-
-
-# --------------------------
-# ADMIN LOGIN
-# --------------------------
-@app.route("/admin-login", methods=["GET", "POST"])
-def admin_login():
-    if request.method == "POST":
-
-        user = User.query.filter_by(
-            first_name=request.form.get("first"),
-            role="admin"
-        ).first()
-
-        if user and check_password_hash(user.password, request.form.get("password")):
-            login_user(user)
-            return redirect("/admin")
-
-        return "❌ Not an admin"
-
-    return render_template("admin_login.html")
-
-
-# --------------------------
-# ADMIN DASHBOARD
-# --------------------------
-@app.route("/admin")
-@login_required
-def admin():
-    if current_user.role != "admin":
-        return "❌ Access denied"
-
-    return render_template("admin.html")
-
-
-# --------------------------
-# LOGOUT
-# --------------------------
-@app.route("/logout")
-@login_required
-def logout():
-    logout_user()
-    return redirect("/login")
-
-
-# --------------------------
-# CREATE DB (RUN ONCE)
+# CREATE DB COMMAND
 # --------------------------
 @app.cli.command("create-db")
 def create_db():
     db.create_all()
-    print("✅ Database created!")
-
+    print("Database created!")
 
 # --------------------------
 # RUN
