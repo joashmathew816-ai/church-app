@@ -1,10 +1,11 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect
 from optimizer import optimize_morning
 from models import db, User
-from flask_login import LoginManager
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # --------------------------
-# CREATE APP FIRST
+# CREATE APP
 # --------------------------
 app = Flask(__name__)
 
@@ -21,107 +22,152 @@ db.init_app(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
+login_manager.login_view = "login"
+
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+
 # --------------------------
-# ROUTES
+# HOME (ONLY LOGGED IN USERS)
 # --------------------------
 @app.route("/", methods=["GET", "POST"])
+@login_required
 def home():
     result = None
-    error = None
 
     if request.method == "POST":
 
         drivers = []
         passengers = []
 
-        # --------------------------
-        # GET ALL DRIVERS
-        # --------------------------
         i = 0
         while True:
             name = request.form.get(f"driver_name_{i}")
             if not name:
                 break
 
-            street = request.form.get(f"driver_street_{i}")
-            city = request.form.get(f"driver_city_{i}")
-            province = request.form.get(f"driver_province_{i}")
-            capacity_raw = request.form.get(f"driver_capacity_{i}")
-
-            if not all([street, city, province, capacity_raw]):
-                return render_template("index.html", error="❌ Fill all driver fields")
-
-            try:
-                capacity = int(capacity_raw)
-                if capacity < 1 or capacity > 8:
-                    raise ValueError
-            except:
-                return render_template("index.html", error="❌ Capacity must be 1–8")
-
             drivers.append({
                 "name": name,
-                "address": f"{street}, {city}, {province}",
-                "capacity": capacity,
+                "address": request.form.get(f"driver_address_{i}"),
+                "capacity": int(request.form.get(f"driver_capacity_{i}")),
                 "morning": True,
                 "is_returning": True
             })
-
             i += 1
 
-        # --------------------------
-        # GET ALL PASSENGERS
-        # --------------------------
         i = 0
         while True:
             name = request.form.get(f"passenger_name_{i}")
             if not name:
                 break
 
-            street = request.form.get(f"passenger_street_{i}")
-            city = request.form.get(f"passenger_city_{i}")
-            province = request.form.get(f"passenger_province_{i}")
-
-            if not all([street, city, province]):
-                return render_template("index.html", error="❌ Fill all passenger fields")
-
             passengers.append({
                 "name": name,
-                "address": f"{street}, {city}, {province}",
+                "address": request.form.get(f"passenger_address_{i}"),
                 "morning": True,
                 "is_returning": True
             })
-
             i += 1
 
-        # --------------------------
-        # VALIDATION
-        # --------------------------
-        if not drivers:
-            return render_template("index.html", error="❌ Add at least 1 driver")
-
-        if not passengers:
-            return render_template("index.html", error="❌ Add at least 1 passenger")
-
-        # --------------------------
-        # RUN OPTIMIZER
-        # --------------------------
         church = "114 Lane St, Guelph, ON"
 
         result = optimize_morning(drivers, passengers, church)
-
-        if "error" in result:
-            return render_template("index.html", error=result["error"])
 
     return render_template("index.html", result=result)
 
 
 # --------------------------
-# CREATE DATABASE (RUN ONCE)
+# SIGNUP
+# --------------------------
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if request.method == "POST":
+
+        user = User(
+            first_name=request.form.get("first"),
+            last_name=request.form.get("last"),
+            address=request.form.get("address"),
+            is_driver=("is_driver" in request.form),
+            capacity=int(request.form.get("capacity") or 0),
+            password=generate_password_hash(request.form.get("password")),
+            role="user"
+        )
+
+        db.session.add(user)
+        db.session.commit()
+
+        login_user(user)
+        return redirect("/")
+
+    return render_template("signup.html")
+
+
+# --------------------------
+# LOGIN
+# --------------------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+
+        user = User.query.filter_by(first_name=request.form.get("first")).first()
+
+        if user and check_password_hash(user.password, request.form.get("password")):
+            login_user(user)
+            return redirect("/")
+
+        return "❌ Invalid login"
+
+    return render_template("login.html")
+
+
+# --------------------------
+# ADMIN LOGIN
+# --------------------------
+@app.route("/admin-login", methods=["GET", "POST"])
+def admin_login():
+    if request.method == "POST":
+
+        user = User.query.filter_by(
+            first_name=request.form.get("first"),
+            role="admin"
+        ).first()
+
+        if user and check_password_hash(user.password, request.form.get("password")):
+            login_user(user)
+            return redirect("/admin")
+
+        return "❌ Not an admin"
+
+    return render_template("admin_login.html")
+
+
+# --------------------------
+# ADMIN DASHBOARD
+# --------------------------
+@app.route("/admin")
+@login_required
+def admin():
+    if current_user.role != "admin":
+        return "❌ Access denied"
+
+    return render_template("admin.html")
+
+
+# --------------------------
+# LOGOUT
+# --------------------------
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect("/login")
+
+
+# --------------------------
+# CREATE DB (RUN ONCE)
 # --------------------------
 @app.cli.command("create-db")
 def create_db():
@@ -130,118 +176,7 @@ def create_db():
 
 
 # --------------------------
-# RUN APP
+# RUN
 # --------------------------
 if __name__ == "__main__":
-<<<<<<< HEAD
-=======
-from flask import Flask, render_template, request
-from optimizer import optimize_morning
-
-print("Starting app...")
-app = Flask(__name__)
-
-
-@app.route("/", methods=["GET", "POST"])
-def home():
-    result = None
-    error = None
-
-    if request.method == "POST":
-
-        drivers = []
-        passengers = []
-
-        # --------------------------
-        # GET ALL DRIVERS
-        # --------------------------
-        i = 0
-        while True:
-            name = request.form.get(f"driver_name_{i}")
-
-            if not name:
-                break
-
-            street = request.form.get(f"driver_street_{i}")
-            city = request.form.get(f"driver_city_{i}")
-            province = request.form.get(f"driver_province_{i}")
-            capacity_raw = request.form.get(f"driver_capacity_{i}")
-
-            # Validation
-            if not all([street, city, province, capacity_raw]):
-                error = "❌ Fill all driver fields"
-                return render_template("index.html", error=error)
-
-            try:
-                capacity = int(capacity_raw)
-                if capacity < 1 or capacity > 8:
-                    raise ValueError
-            except:
-                error = "❌ Capacity must be between 1 and 8"
-                return render_template("index.html", error=error)
-
-            drivers.append({
-                "name": name,
-                "address": f"{street}, {city}, {province}",
-                "capacity": capacity,
-                "morning": True,
-                "return": True
-            })
-
-            i += 1
-
-        # --------------------------
-        # GET ALL PASSENGERS
-        # --------------------------
-        i = 0
-        while True:
-            name = request.form.get(f"passenger_name_{i}")
-
-            if not name:
-                break
-
-            street = request.form.get(f"passenger_street_{i}")
-            city = request.form.get(f"passenger_city_{i}")
-            province = request.form.get(f"passenger_province_{i}")
-
-            if not all([street, city, province]):
-                error = "❌ Fill all passenger fields"
-                return render_template("index.html", error=error)
-
-            passengers.append({
-                "name": name,
-                "address": f"{street}, {city}, {province}",
-                "morning": True,
-                "return": True
-            })
-
-            i += 1
-
-        # --------------------------
-        # FINAL VALIDATION
-        # --------------------------
-        if not drivers:
-            return render_template("index.html", error="❌ Add at least 1 driver")
-
-        if not passengers:
-            return render_template("index.html", error="❌ Add at least 1 passenger")
-
-        # --------------------------
-        # RUN OPTIMIZER
-        # --------------------------
-        church = "114 Lane St, Guelph, ON"
-
-        result = optimize_morning(drivers, passengers, church)
-
-        if "error" in result:
-            return render_template("index.html", error=result["error"])
-
-    return render_template("index.html", result=result)
-
-
-if __name__ == "__main__":
-    # IMPORTANT: allows phone access
     app.run(debug=True, host="0.0.0.0")
-=======
-    app.run(debug=True, host="0.0.0.0")
->>>>>>> 492250f (Clean up merge duplicates)

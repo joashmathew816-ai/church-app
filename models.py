@@ -15,6 +15,8 @@ class User(db.Model, UserMixin):
     capacity = db.Column(db.Integer, default=0)
 
     coming = db.Column(db.Boolean, default=False)
-    is_returning = db.Column(db.Boolean)
+    is_returning = db.Column(db.Boolean, default=False)
 
     password = db.Column(db.String(200))
+
+    role = db.Column(db.String(10), default="user")  # user or admin
