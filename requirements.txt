@@ -1,7 +1,6 @@
 flask
 requests
 ortools
-<<<<<<< HEAD
 gunicorn
-=======
->>>>>>> 492250f (Clean up merge duplicates)
+Flask-Login
+Flask_SQLAlchemy
