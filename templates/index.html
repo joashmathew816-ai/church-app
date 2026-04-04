@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html>
 <head>
@@ -133,3 +134,140 @@ function addPassenger() {
 
 </body>
 </html>
+=======
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Church Transport</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background-color: #f4f6f8;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #2c3e50;
+        }
+
+        .card {
+            background: white;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            box-shadow: 0px 2px 5px rgba(0,0,0,0.1);
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        .loading {
+            display: none;
+            color: green;
+            font-weight: bold;
+        }
+    </style>
+
+    <script>
+        function showLoading() {
+            document.getElementById("loading").style.display = "block";
+        }
+    </script>
+</head>
+
+<body>
+
+<h1>🚗 Church Transportation Planner</h1>
+
+<form method="POST" onsubmit="showLoading()">
+
+    <h2>Drivers</h2>
+    <div id="drivers"></div>
+    <button type="button" onclick="addDriver()">+ Add Driver</button>
+
+    <h2>Passengers</h2>
+    <div id="passengers"></div>
+    <button type="button" onclick="addPassenger()">+ Add Passenger</button>
+
+    <br><br>
+    <button type="submit">Generate Routes</button>
+
+    <p id="loading" class="loading">⏳ Optimizing routes... please wait</p>
+
+</form>
+
+{% if error %}
+    <p style="color:red;">{{ error }}</p>
+{% endif %}
+
+{% if result %}
+    <h2>Routes</h2>
+
+    {% for route in result.routes %}
+        <div class="card">
+            <h3>{{ route.driver }}</h3>
+
+            {% for stop in route.stops %}
+                <p>Pick up {{ stop.passengers | join(', ') }} from {{ stop.address }}</p>
+            {% endfor %}
+
+            <p><b>Time:</b> {{ route.time_min }} min</p>
+            <p><b>Distance:</b> {{ route.distance_km }} km</p>
+        </div>
+    {% endfor %}
+
+    <h3>Total Time: {{ result.total_time_min }} min</h3>
+    <h3>Total Distance: {{ result.total_distance_km }} km</h3>
+{% endif %}
+
+
+<script>
+let driverCount = 0;
+let passengerCount = 0;
+
+function addDriver() {
+    const div = document.createElement("div");
+    div.className = "card";
+
+    div.innerHTML = `
+        <p>Name: <input name="driver_name_${driverCount}" required></p>
+        <p>Street: <input name="driver_street_${driverCount}" required></p>
+        <p>City: <input name="driver_city_${driverCount}" required></p>
+        <p>Province: <input name="driver_province_${driverCount}" required></p>
+        <p>Capacity: <input type="number" name="driver_capacity_${driverCount}" min="1" max="8" required></p>
+    `;
+
+    document.getElementById("drivers").appendChild(div);
+    driverCount++;
+}
+
+function addPassenger() {
+    const div = document.createElement("div");
+    div.className = "card";
+
+    div.innerHTML = `
+        <p>Name: <input name="passenger_name_${passengerCount}" required></p>
+        <p>Street: <input name="passenger_street_${passengerCount}" required></p>
+        <p>City: <input name="passenger_city_${passengerCount}" required></p>
+        <p>Province: <input name="passenger_province_${passengerCount}" required></p>
+    `;
+
+    document.getElementById("passengers").appendChild(div);
+    passengerCount++;
+}
+</script>
+
+</body>
+</html>
+>>>>>>> 10fdc30d77c6b753c95dd1cefeb558af46455134
