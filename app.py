@@ -133,6 +133,7 @@ def create_db():
 # RUN APP
 # --------------------------
 if __name__ == "__main__":
+<<<<<<< HEAD
 =======
 from flask import Flask, render_template, request
 from optimizer import optimize_morning
@@ -241,3 +242,6 @@ def home():
 if __name__ == "__main__":
     # IMPORTANT: allows phone access
     app.run(debug=True, host="0.0.0.0")
+=======
+    app.run(debug=True, host="0.0.0.0")
+>>>>>>> 492250f (Clean up merge duplicates)
