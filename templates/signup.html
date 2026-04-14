@@ -1,9 +1,189 @@
-<h2>Sign Up</h2>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sign Up</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<form method="POST">
-    <input name="first_name" placeholder="First Name"><br>
-    <input name="last_name" placeholder="Last Name"><br>
-    <input name="address" placeholder="Address"><br>
-    <input name="password" type="password" placeholder="Password"><br>
-    <button type="submit">Sign Up</button>
-</form>
+    <style>
+        body {
+            font-family: Arial;
+            text-align: center;
+            margin-top: 60px;
+            background: #f4f6f8;
+        }
+
+        .card {
+            background: white;
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 30px;
+            border-radius: 12px;
+        }
+
+        label {
+            display: block;
+            text-align: left;
+            margin-top: 14px;
+            margin-bottom: 4px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        input, select {
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 12px;
+            width: 100%;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+
+        .autocomplete-wrapper {
+            position: relative;
+            text-align: left;
+        }
+
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 9999;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .autocomplete-list div {
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 0.9em;
+            text-align: left;
+        }
+
+        .autocomplete-list div:hover {
+            background: #f0f4f8;
+        }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h2>Sign Up</h2>
+
+    <form method="POST">
+
+        <label>First Name</label>
+        <input name="first_name" required>
+
+        <label>Last Name</label>
+        <input name="last_name" required>
+
+        <label>Password</label>
+        <input type="password" name="password" required>
+
+        <label>Phone Number</label>
+        <input name="phone" placeholder="e.g. 519-555-1234" required>
+
+        <label>Address</label>
+        <div class="autocomplete-wrapper">
+            <input name="address" id="addressInput" placeholder="Start typing your address..." required autocomplete="off">
+            <div class="autocomplete-list" id="addressDropdown" style="display:none;"></div>
+        </div>
+
+        <label>I am a driver</label>
+        <select name="is_driver" id="driverSelect" onchange="toggleCapacity()">
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+        </select>
+
+        <div id="capacityDiv" style="display:none; margin-top:10px;">
+            <label>Capacity (1–8)</label>
+            <input type="number" name="capacity" min="1" max="8" placeholder="How many passengers can you carry?">
+        </div>
+
+        <br>
+        <button type="submit">Create Account</button>
+
+    </form>
+
+    {% if error %}
+        <p style="color:red;">{{ error }}</p>
+    {% endif %}
+
+    <p>Already have an account? <a href="/login">Login</a></p>
+</div>
+
+<script>
+function toggleCapacity() {
+    let val = document.getElementById("driverSelect").value;
+    document.getElementById("capacityDiv").style.display = val === "yes" ? "block" : "none";
+}
+
+// Address autocomplete
+let debounceTimer;
+
+document.getElementById("addressInput").addEventListener("input", function() {
+    clearTimeout(debounceTimer);
+    let query = this.value.trim();
+    let dropdown = document.getElementById("addressDropdown");
+
+    if (query.length < 3) {
+        dropdown.style.display = "none";
+        return;
+    }
+
+    debounceTimer = setTimeout(function() {
+        fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q=" + encodeURIComponent(query), {
+            headers: { "Accept-Language": "en" }
+        })
+        .then(r => r.json())
+        .then(function(results) {
+            dropdown.innerHTML = "";
+            if (results.length === 0) {
+                dropdown.style.display = "none";
+                return;
+            }
+            results.forEach(function(place) {
+                let item = document.createElement("div");
+                item.textContent = place.display_name;
+                item.onclick = function() {
+                    document.getElementById("addressInput").value = place.display_name;
+                    dropdown.style.display = "none";
+                };
+                dropdown.appendChild(item);
+            });
+            dropdown.style.display = "block";
+        })
+        .catch(function() {
+            dropdown.style.display = "none";
+        });
+    }, 400);
+});
+
+// Close dropdown when clicking outside
+document.addEventListener("click", function(e) {
+    if (!e.target.closest(".autocomplete-wrapper")) {
+        document.getElementById("addressDropdown").style.display = "none";
+    }
+});
+</script>
+
+</body>
+</html>

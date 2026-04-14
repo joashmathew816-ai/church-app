@@ -1,5 +1,22 @@
-<h2>Welcome {{ user.first_name }}</h2>
+{% extends "base.html" %}
 
-<a href="/logout">
-    <button>Logout</button>
-</a>
+{% block content %}
+
+<h2>Welcome</h2>
+
+{% if incomplete %}
+<div style="background:#fff3cd; border:1px solid #ffc107; padding:15px;
+            border-radius:10px; margin-bottom:20px;">
+    ⚠️ <b>Your profile is incomplete.</b>
+    Please <a href="/profile">complete your profile</a>
+    (address and phone number) before participating in polls.
+</div>
+{% endif %}
+
+<div class="card">
+    <p>Welcome to the app 👋</p>
+    <p>If you have questions, contact:</p>
+    <p><b>joashmathew816@gmail.com</b></p>
+</div>
+
+{% endblock %}

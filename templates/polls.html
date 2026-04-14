@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Polls</h2>
+
+{% if profile_warning %}
+<div style="background:#fff3cd; border:1px solid #ffc107; padding:15px;
+            border-radius:10px; margin-bottom:20px;">
+    ⚠️ <b>You need to complete your profile before you can vote.</b>
+    Please <a href="/profile">add your address and phone number</a> first.
+</div>
+
+{% else %}
+
+{% for item in polls %}
+<div style="
+    background: white;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 10px;
+    {% if not item.user_eligible %}
+        opacity: 0.5;
+        filter: grayscale(60%);
+        border: 1px dashed #aaa;
+    {% endif %}
+">
+
+    <h3>{{ item.title }}</h3>
+
+    {% if not item.user_eligible %}
+        <p style="color: #888; font-style: italic;">
+            🚫 This poll is for
+            {% if item.target == "drivers" %}drivers{% else %}passengers{% endif %}
+            only — you cannot vote here.
+        </p>
+    {% endif %}
+
+    {% if item.user_eligible %}
+        <form method="POST">
+            <input type="hidden" name="poll_id" value="{{ item.id }}">
+
+            {% for opt in item.options %}
+                <div>
+                    <input type="radio" name="answer" value="{{ opt }}"
+                        {% if item.user_answer == opt %}checked{% endif %}
+                        required>
+                    {{ opt }}
+                </div>
+            {% endfor %}
+
+            <br>
+            <button type="submit">
+                {% if item.user_answer %}Update Vote{% else %}Submit{% endif %}
+            </button>
+
+            {% if item.user_answer %}
+                <span style="color: green; margin-left: 10px;">
+                    ✅ You voted: {{ item.user_answer }}
+                </span>
+            {% endif %}
+
+        </form>
+    {% else %}
+        {% for opt in item.options %}
+            <div style="color: #aaa;">
+                <input type="radio" disabled> {{ opt }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if current_user.role == "admin" %}
+        <hr>
+        <b>Results:</b>
+
+        {% for opt in item.options %}
+            <p>
+                {{ opt }} → {{ item.counts[opt] }} votes
+                ({{ item.users[opt]|join(", ") }})
+            </p>
+        {% endfor %}
+
+        <p><b>Total:</b> {{ item.total }}</p>
+        <p style="color: #888; font-size: 0.85em;">
+            Audience: <b>{{ item.target }}</b>
+        </p>
+    {% endif %}
+
+</div>
+{% endfor %}
+
+{% endif %}
+
+{% endblock %}

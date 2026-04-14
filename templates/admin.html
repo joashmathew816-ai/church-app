@@ -1,4 +1,11 @@
-<h2>Admin Panel - {{ user.first_name }}</h2>
+{% extends "base.html" %}
 
-<a href="/">Generate Routes</a><br>
-<a href="/logout">Logout</a>
+{% block content %}
+
+<h2>Admin Panel</h2>
+
+<div class="card">
+    <p>Welcome Admin 👑</p>
+</div>
+
+{% endblock %}

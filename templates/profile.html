@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Profile</h2>
+
+<div style="background:white; padding:20px; border-radius:10px;">
+
+<form method="POST">
+
+    <!-- NAME (LOCKED) -->
+    <label>First Name</label>
+    <input value="{{ current_user.first_name }}" disabled style="background:#ddd;">
+
+    <label>Last Name</label>
+    <input value="{{ current_user.last_name }}" disabled style="background:#ddd;">
+
+    <br><br>
+
+    <!-- PHONE -->
+    <label>Phone Number</label>
+    <input name="phone" value="{{ current_user.phone or '' }}"
+           placeholder="e.g. 519-555-1234" required>
+
+    <br><br>
+
+    <!-- ADDRESS with autocomplete -->
+    <label>Address</label>
+    <div class="autocomplete-wrapper">
+        <input name="address" id="addressInput"
+               value="{{ current_user.address or '' }}"
+               placeholder="Start typing your address..."
+               required autocomplete="off">
+        <div class="autocomplete-list" id="addressDropdown" style="display:none;"></div>
+    </div>
+
+    <br>
+
+    <!-- DRIVER -->
+    <label>
+        <input type="checkbox" name="is_driver" id="driverCheck"
+        {% if current_user.is_driver %}checked{% endif %}
+        onclick="toggleCapacity()">
+        I am a driver
+    </label>
+
+    <p style="color: #888; font-size: 0.85em; margin-top: 5px;">
+        ⚠️ Changing your driver status will remove any votes you've cast
+        on polls you're no longer eligible for.
+    </p>
+
+    <!-- CAPACITY -->
+    <div id="capacityDiv" style="display:none; margin-top:10px;">
+        <label>Capacity (1–8)</label>
+        <input type="number" name="capacity"
+               min="1" max="8"
+               value="{{ current_user.capacity or '' }}">
+    </div>
+
+    <br>
+    <button type="submit">Save</button>
+
+</form>
+
+{% if error %}
+    <p style="color:red;">{{ error }}</p>
+{% endif %}
+
+{% if success %}
+    <p style="color:green;">{{ success }}</p>
+{% endif %}
+
+</div>
+
+<script>
+function toggleCapacity() {
+    var check = document.getElementById("driverCheck");
+    var cap = document.getElementById("capacityDiv");
+    cap.style.display = check.checked ? "block" : "none";
+}
+
+window.onload = function() {
+    toggleCapacity();
+}
+
+// Address autocomplete
+let debounceTimer;
+
+document.getElementById("addressInput").addEventListener("input", function() {
+    clearTimeout(debounceTimer);
+    let query = this.value.trim();
+    let dropdown = document.getElementById("addressDropdown");
+
+    if (query.length < 3) {
+        dropdown.style.display = "none";
+        return;
+    }
+
+    debounceTimer = setTimeout(function() {
+        fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q=" + encodeURIComponent(query), {
+            headers: { "Accept-Language": "en" }
+        })
+        .then(r => r.json())
+        .then(function(results) {
+            dropdown.innerHTML = "";
+            if (results.length === 0) {
+                dropdown.style.display = "none";
+                return;
+            }
+            results.forEach(function(place) {
+                let item = document.createElement("div");
+                item.textContent = place.display_name;
+                item.onclick = function() {
+                    document.getElementById("addressInput").value = place.display_name;
+                    dropdown.style.display = "none";
+                };
+                dropdown.appendChild(item);
+            });
+            dropdown.style.display = "block";
+        })
+        .catch(function() {
+            dropdown.style.display = "none";
+        });
+    }, 400);
+});
+
+document.addEventListener("click", function(e) {
+    if (!e.target.closest(".autocomplete-wrapper")) {
+        document.getElementById("addressDropdown").style.display = "none";
+    }
+});
+</script>
+
+{% endblock %}

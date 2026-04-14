@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Poll Management</h2>
+
+<!-- TOP BUTTONS -->
+<div style="display:flex; gap:10px; margin-bottom:20px;">
+    <button onclick="showSection('createForm')">➕ Create Poll</button>
+    <button onclick="showSection('editSection')">✏️ Edit Poll</button>
+    <button onclick="showSection('deleteSection')">❌ Remove Poll</button>
+</div>
+
+
+<!-- ======================== -->
+<!-- CREATE FORM              -->
+<!-- ======================== -->
+<div id="createForm" style="display:none; background:white; padding:20px; border-radius:10px;">
+
+    <h3>Create a New Poll</h3>
+
+    <form method="POST" action="/admin/create_poll">
+
+        <label>Poll Question</label>
+        <input name="title" placeholder="e.g. Will you attend Sunday?" required>
+
+        <br><br>
+
+        <label>Options</label>
+        <div id="optionsContainer">
+            <input name="option_0" class="optionInput" placeholder="Option 1" required>
+        </div>
+
+        <button type="button" onclick="addCreateOption()">➕ Add Option</button>
+
+        <br><br>
+
+        <label>Who should see this?</label>
+        <select name="target">
+            <option value="everyone">Everyone</option>
+            <option value="drivers">Drivers</option>
+            <option value="passengers">Passengers</option>
+        </select>
+
+        <br><br>
+        <button type="submit">Create Poll</button>
+
+    </form>
+
+    {% if error %}
+        <p style="color:red;">{{ error }}</p>
+    {% endif %}
+
+    {% if success %}
+        <p style="color:green;">{{ success }}</p>
+    {% endif %}
+
+</div>
+
+
+<!-- ======================== -->
+<!-- EDIT SECTION             -->
+<!-- ======================== -->
+<div id="editSection" style="display:none;">
+
+    <h3>Select a Poll to Edit</h3>
+
+    <div id="pollPickerList" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
+        <p style="color:#888;">Loading polls...</p>
+    </div>
+
+    <div id="editForm" style="display:none; background:white; padding:20px; border-radius:10px;">
+
+        <h3>Editing: <span id="editPollTitleDisplay"></span></h3>
+
+        <form method="POST" action="/admin/edit_poll">
+
+            <input type="hidden" name="poll_id" id="editPollId">
+
+            <label>Poll Question</label>
+            <input name="title" id="editTitleInput" required>
+
+            <br><br>
+
+            <label>Who should see this?</label>
+            <select name="target" id="editTargetSelect">
+                <option value="everyone">Everyone</option>
+                <option value="drivers">Drivers</option>
+                <option value="passengers">Passengers</option>
+            </select>
+
+            <br><br>
+
+            <label>Options</label>
+            <div id="editOptionsContainer"></div>
+
+            <button type="button" onclick="addEditOption()">➕ Add Option</button>
+
+            <br><br>
+
+            <p style="color:#c0392b; font-size:0.9em;">
+                ⚠️ Deleting an option will refund the votes of anyone who chose it,
+                so they can vote again.
+            </p>
+
+            <button type="submit">💾 Save Changes</button>
+            <button type="button" onclick="cancelEdit()"
+                    style="margin-left:10px; background:#aaa;">Cancel</button>
+
+        </form>
+
+    </div>
+
+    {% if edit_success %}
+        <p style="color:green;">{{ edit_success }}</p>
+    {% endif %}
+
+</div>
+
+
+<!-- ======================== -->
+<!-- DELETE SECTION           -->
+<!-- ======================== -->
+<div id="deleteSection" style="display:none;">
+
+    <h3>Select Polls to Delete</h3>
+
+    <p style="color:#888; font-size:0.9em;">
+        Tick the polls you want to remove, then press
+        <b>Confirm Delete</b>. This cannot be undone.
+    </p>
+
+    <!-- The list of checkboxes is built by JS from all_polls -->
+    <form method="POST" action="/admin/delete_polls" id="deleteForm">
+
+        <div id="deletePollList"
+             style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
+            <p style="color:#888;">Loading polls...</p>
+        </div>
+
+        <!-- Shown only when at least one box is ticked -->
+        <div id="deleteActions" style="display:none; gap:10px; margin-top:10px;">
+
+            <div id="deleteWarning"
+                 style="background:#fdecea; border:1px solid #e74c3c;
+                        padding:12px; border-radius:8px; margin-bottom:12px;">
+                <b style="color:#c0392b;">⚠️ Warning:</b>
+                <span id="deleteWarningText" style="color:#c0392b;"></span>
+                All votes cast in those polls will also be permanently removed.
+            </div>
+
+            <button type="submit"
+                    style="background:#e74c3c; color:white; padding:10px 20px;
+                           border:none; border-radius:6px; cursor:pointer;">
+                🗑️ Confirm Delete
+            </button>
+
+            <button type="button" onclick="cancelDelete()"
+                    style="margin-left:10px; background:#aaa; color:white;
+                           padding:10px 20px; border:none; border-radius:6px; cursor:pointer;">
+                Cancel
+            </button>
+
+        </div>
+
+    </form>
+
+    {% if delete_success %}
+        <p style="color:green; font-weight:bold;">✅ {{ delete_success }}</p>
+    {% endif %}
+
+</div>
+
+
+<!-- ======================== -->
+<!-- JAVASCRIPT               -->
+<!-- ======================== -->
+<script>
+
+const ALL_POLLS = {{ all_polls | tojson }};
+
+const TARGET_LABEL = {
+    "everyone":   "Everyone 👥",
+    "drivers":    "Drivers 🚗",
+    "passengers": "Passengers 🧍"
+};
+
+
+// ------------------------------------------------
+// SECTION SWITCHING
+// ------------------------------------------------
+function showSection(id) {
+    ["createForm", "editSection", "deleteSection"].forEach(function(s) {
+        document.getElementById(s).style.display = "none";
+    });
+    document.getElementById(id).style.display = "block";
+
+    if (id === "editSection")  renderPollPicker();
+    if (id === "deleteSection") renderDeleteList();
+}
+
+
+// ------------------------------------------------
+// CREATE: add option input
+// ------------------------------------------------
+function addCreateOption() {
+    let container = document.getElementById("optionsContainer");
+    let count = container.children.length;
+    let input = document.createElement("input");
+    input.name = "option_" + count;
+    input.className = "optionInput";
+    input.placeholder = "Option " + (count + 1);
+    container.appendChild(input);
+}
+
+
+// ------------------------------------------------
+// EDIT: render poll picker
+// ------------------------------------------------
+function renderPollPicker() {
+    let container = document.getElementById("pollPickerList");
+    container.innerHTML = "";
+
+    if (ALL_POLLS.length === 0) {
+        container.innerHTML = "<p style='color:#888;'>No polls found.</p>";
+        return;
+    }
+
+    ALL_POLLS.forEach(function(poll) {
+        let card = document.createElement("div");
+        card.style = "background:white; padding:12px; border-radius:8px; " +
+                     "cursor:pointer; border:2px solid transparent;";
+        card.innerHTML = `<b>${poll.title}</b>
+            <span style="float:right; color:#888; font-size:0.85em;">
+                ${TARGET_LABEL[poll.target] || poll.target}
+            </span>`;
+        card.onclick = function() {
+            document.querySelectorAll("#pollPickerList div")
+                    .forEach(c => c.style.border = "2px solid transparent");
+            card.style.border = "2px solid #2c3e50";
+            loadEditForm(poll.id);
+        };
+        container.appendChild(card);
+    });
+}
+
+
+// ------------------------------------------------
+// EDIT: load selected poll into form
+// ------------------------------------------------
+async function loadEditForm(pollId) {
+    let res  = await fetch("/admin/get_poll/" + pollId);
+    let poll = await res.json();
+
+    document.getElementById("editPollId").value             = poll.id;
+    document.getElementById("editPollTitleDisplay").textContent = poll.title;
+    document.getElementById("editTitleInput").value          = poll.title;
+    document.getElementById("editTargetSelect").value        = poll.target;
+
+    let container = document.getElementById("editOptionsContainer");
+    container.innerHTML = "";
+    poll.options.forEach(function(opt, i) { addEditOptionRow(opt, i); });
+
+    document.getElementById("editForm").style.display = "block";
+    document.getElementById("editForm").scrollIntoView({ behavior: "smooth" });
+}
+
+
+// ------------------------------------------------
+// EDIT: single option row with delete button
+// ------------------------------------------------
+function addEditOptionRow(value, index) {
+    let container = document.getElementById("editOptionsContainer");
+    let count = index !== undefined ? index : container.children.length;
+
+    let wrapper = document.createElement("div");
+    wrapper.style = "display:flex; gap:8px; margin-bottom:6px; align-items:center;";
+
+    let input = document.createElement("input");
+    input.name        = "edit_option_" + count;
+    input.value       = value || "";
+    input.placeholder = "Option " + (count + 1);
+    input.style       = "flex:1;";
+
+    let deleteBtn = document.createElement("button");
+    deleteBtn.type      = "button";
+    deleteBtn.textContent = "🗑️";
+    deleteBtn.style     = "background:#e74c3c; color:white; border:none; " +
+                          "padding:6px 10px; border-radius:5px; cursor:pointer;";
+    deleteBtn.onclick = function() {
+        wrapper.remove();
+        reindexEditOptions();
+    };
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(deleteBtn);
+    container.appendChild(wrapper);
+}
+
+function addEditOption() {
+    let container = document.getElementById("editOptionsContainer");
+    addEditOptionRow("", container.children.length);
+}
+
+function reindexEditOptions() {
+    let inputs = document.querySelectorAll("#editOptionsContainer input");
+    inputs.forEach(function(input, i) {
+        input.name        = "edit_option_" + i;
+        input.placeholder = "Option " + (i + 1);
+    });
+}
+
+function cancelEdit() {
+    document.getElementById("editForm").style.display = "none";
+    document.querySelectorAll("#pollPickerList div")
+            .forEach(c => c.style.border = "2px solid transparent");
+}
+
+
+// ------------------------------------------------
+// DELETE: render checkbox list
+// ------------------------------------------------
+function renderDeleteList() {
+    let container = document.getElementById("deletePollList");
+    container.innerHTML = "";
+
+    // Reset action bar
+    document.getElementById("deleteActions").style.display = "none";
+
+    if (ALL_POLLS.length === 0) {
+        container.innerHTML = "<p style='color:#888;'>No polls to delete.</p>";
+        return;
+    }
+
+    ALL_POLLS.forEach(function(poll) {
+        let card = document.createElement("label");
+        card.style = "display:flex; align-items:center; gap:12px; " +
+                     "background:white; padding:12px; border-radius:8px; " +
+                     "cursor:pointer; border:2px solid transparent; " +
+                     "transition: border 0.2s;";
+
+        let checkbox = document.createElement("input");
+        checkbox.type  = "checkbox";
+        checkbox.name  = "delete_ids";
+        checkbox.value = poll.id;
+        checkbox.style = "width:18px; height:18px; cursor:pointer;";
+        checkbox.addEventListener("change", updateDeleteActions);
+
+        let textWrapper = document.createElement("div");
+        textWrapper.style = "flex:1;";
+        textWrapper.innerHTML = `
+            <b>${poll.title}</b>
+            <span style="float:right; color:#888; font-size:0.85em;">
+                ${TARGET_LABEL[poll.target] || poll.target}
+            </span>`;
+
+        card.appendChild(checkbox);
+        card.appendChild(textWrapper);
+
+        // Highlight card when checked
+        checkbox.addEventListener("change", function() {
+            card.style.border = checkbox.checked
+                ? "2px solid #e74c3c"
+                : "2px solid transparent";
+        });
+
+        container.appendChild(card);
+    });
+}
+
+
+// ------------------------------------------------
+// DELETE: show/hide confirm bar based on selection
+// ------------------------------------------------
+function updateDeleteActions() {
+    let checked = document.querySelectorAll("#deletePollList input[type=checkbox]:checked");
+    let actions = document.getElementById("deleteActions");
+
+    if (checked.length > 0) {
+        actions.style.display = "block";
+        let names = Array.from(checked).map(function(cb) {
+            let poll = ALL_POLLS.find(p => p.id == cb.value);
+            return poll ? `"${poll.title}"` : "";
+        }).filter(Boolean).join(", ");
+
+        document.getElementById("deleteWarningText").textContent =
+            `You are about to permanently delete ${checked.length} ` +
+            `poll${checked.length > 1 ? "s" : ""}: ${names}. `;
+    } else {
+        actions.style.display = "none";
+    }
+}
+
+
+// ------------------------------------------------
+// DELETE: cancel — untick everything and hide bar
+// ------------------------------------------------
+function cancelDelete() {
+    document.querySelectorAll("#deletePollList input[type=checkbox]")
+            .forEach(function(cb) {
+                cb.checked = false;
+                // Reset card border
+                if (cb.parentElement) {
+                    cb.parentElement.style.border = "2px solid transparent";
+                }
+            });
+    document.getElementById("deleteActions").style.display = "none";
+}
+
+
+// ------------------------------------------------
+// AUTO-OPEN correct section after a POST
+// ------------------------------------------------
+{% if success %}
+    document.addEventListener("DOMContentLoaded", function() {
+        showSection("createForm");
+        alert("✅ Poll Created!");
+    });
+{% endif %}
+
+{% if edit_success %}
+    document.addEventListener("DOMContentLoaded", function() {
+        showSection("editSection");
+    });
+{% endif %}
+
+{% if delete_success %}
+    document.addEventListener("DOMContentLoaded", function() {
+        showSection("deleteSection");
+    });
+{% endif %}
+
+</script>
+
+{% endblock %}
