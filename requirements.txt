@@ -5,3 +5,4 @@ werkzeug
 ortools
 requests
 gunicorn
+psycopg2-binary
