@@ -455,6 +455,32 @@ def create_db():
     db.create_all()
     print("Database created!")
 
+# ----------------------
+# SETUP ROUTE (run once after deploy, then remove)
+# ----------------------
+@app.route("/setup")
+def setup():
+    db.create_all()
+
+    # Check if admin already exists to avoid duplicates
+    existing = User.query.filter_by(first_name="Admin").first()
+    if not existing:
+        admin = User(
+            first_name="Admin",
+            last_name="User",
+            password=generate_password_hash("admin123"),
+            role="admin",
+            is_driver=False,
+            capacity=0,
+            phone="0000000000",
+            address="114 Lane St, Guelph, ON"
+        )
+        db.session.add(admin)
+        db.session.commit()
+        return "✅ Database created and admin account set up!"
+
+    return "✅ Database already exists, nothing changed."
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
