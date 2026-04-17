@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>📥 User Feedback</h2>
+
+{% if feedback_list %}
+    {% for fb in feedback_list %}
+    <div style="background:white; padding:15px; border-radius:10px;
+                margin-bottom:12px; border-left:4px solid #2c3e50;">
+
+        <div style="display:flex; justify-content:space-between;
+                    align-items:flex-start; margin-bottom:6px;">
+            <div>
+                <b>{{ fb.name }}</b>
+                <span style="color:#888; font-size:0.85em; margin-left:10px;">
+                    {{ fb.created_at }} (Ontario)
+                </span>
+            </div>
+            <form method="POST" action="/admin/delete_feedback/{{ fb.id }}"
+                  onsubmit="return confirm('Delete this message from {{ fb.name }}?');"
+                  style="margin:0;">
+                <button type="submit"
+                        style="background:#e74c3c; color:white; border:none;
+                               padding:5px 12px; border-radius:5px;
+                               cursor:pointer; font-size:0.85em;">
+                    🗑️ Delete
+                </button>
+            </form>
+        </div>
+
+        <p style="margin:0; color:#333;">{{ fb.message }}</p>
+    </div>
+    {% endfor %}
+{% else %}
+    <div style="background:white; padding:20px; border-radius:10px; color:#888;">
+        No feedback yet.
+    </div>
+{% endif %}
+
+{% endblock %}

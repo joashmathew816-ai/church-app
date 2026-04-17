@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>💬 Feedback</h2>
+
+<div style="background:white; padding:20px; border-radius:10px;">
+
+    <p style="color:#555;">
+        Have a suggestion, question, or something to report? Leave a message below
+        and the admin will see it.
+    </p>
+
+    <form method="POST">
+        <label><b>Your Message</b></label>
+        <textarea name="message" rows="5"
+                  placeholder="Write your feedback here..."
+                  style="width:100%; box-sizing:border-box; padding:10px;
+                         border:1px solid #ccc; border-radius:6px;
+                         font-size:1em; font-family:Arial; resize:vertical;"
+                  required></textarea>
+        <br><br>
+        <button type="submit"
+                style="background:#2c3e50; color:white; padding:12px 24px;
+                       border:none; border-radius:6px; font-size:1em; cursor:pointer;">
+            📨 Send Feedback
+        </button>
+    </form>
+
+    {% if error %}
+        <p style="color:red;">{{ error }}</p>
+    {% endif %}
+
+    {% if success %}
+        <p style="color:green;">{{ success }}</p>
+    {% endif %}
+
+</div>
+
+{% endblock %}

@@ -4,7 +4,6 @@
 
 <h2>Poll Management</h2>
 
-<!-- TOP BUTTONS -->
 <div style="display:flex; gap:10px; margin-bottom:20px;">
     <button onclick="showSection('createForm')">➕ Create Poll</button>
     <button onclick="showSection('editSection')">✏️ Edit Poll</button>
@@ -13,9 +12,10 @@
 
 
 <!-- ======================== -->
-<!-- CREATE FORM              -->
+<!-- CREATE                   -->
 <!-- ======================== -->
-<div id="createForm" style="display:none; background:white; padding:20px; border-radius:10px;">
+<div id="createForm" style="display:none; background:white;
+     padding:20px; border-radius:10px;">
 
     <h3>Create a New Poll</h3>
 
@@ -30,7 +30,6 @@
         <div id="optionsContainer">
             <input name="option_0" class="optionInput" placeholder="Option 1" required>
         </div>
-
         <button type="button" onclick="addCreateOption()">➕ Add Option</button>
 
         <br><br>
@@ -43,33 +42,41 @@
         </select>
 
         <br><br>
+
+        <label>
+            Close poll at (optional)
+            <span style="color:#888; font-size:0.85em;">
+                — leave blank for no expiry
+            </span>
+        </label>
+        <input type="datetime-local" name="closes_at" id="createClosesAt"
+               style="width:100%; box-sizing:border-box; padding:10px;
+                      border:1px solid #ccc; border-radius:6px;">
+
+        <br><br>
         <button type="submit">Create Poll</button>
 
     </form>
 
-    {% if error %}
-        <p style="color:red;">{{ error }}</p>
-    {% endif %}
-
-    {% if success %}
-        <p style="color:green;">{{ success }}</p>
-    {% endif %}
+    {% if error %}   <p style="color:red;">{{ error }}</p>   {% endif %}
+    {% if success %} <p style="color:green;">{{ success }}</p> {% endif %}
 
 </div>
 
 
 <!-- ======================== -->
-<!-- EDIT SECTION             -->
+<!-- EDIT                     -->
 <!-- ======================== -->
 <div id="editSection" style="display:none;">
 
     <h3>Select a Poll to Edit</h3>
-
-    <div id="pollPickerList" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
+    <div id="pollPickerList"
+         style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
         <p style="color:#888;">Loading polls...</p>
     </div>
 
-    <div id="editForm" style="display:none; background:white; padding:20px; border-radius:10px;">
+    <div id="editForm" style="display:none; background:white;
+         padding:20px; border-radius:10px;">
 
         <h3>Editing: <span id="editPollTitleDisplay"></span></h3>
 
@@ -93,14 +100,24 @@
 
             <label>Options</label>
             <div id="editOptionsContainer"></div>
-
             <button type="button" onclick="addEditOption()">➕ Add Option</button>
 
             <br><br>
 
+            <label>
+                Close poll at (optional)
+                <span style="color:#888; font-size:0.85em;">
+                    — leave blank to remove expiry
+                </span>
+            </label>
+            <input type="datetime-local" name="closes_at" id="editClosesAt"
+                   style="width:100%; box-sizing:border-box; padding:10px;
+                          border:1px solid #ccc; border-radius:6px;">
+
+            <br><br>
+
             <p style="color:#c0392b; font-size:0.9em;">
-                ⚠️ Deleting an option will refund the votes of anyone who chose it,
-                so they can vote again.
+                ⚠️ Deleting an option refunds votes for that option.
             </p>
 
             <button type="submit">💾 Save Changes</button>
@@ -119,18 +136,15 @@
 
 
 <!-- ======================== -->
-<!-- DELETE SECTION           -->
+<!-- DELETE                   -->
 <!-- ======================== -->
 <div id="deleteSection" style="display:none;">
 
     <h3>Select Polls to Delete</h3>
-
     <p style="color:#888; font-size:0.9em;">
-        Tick the polls you want to remove, then press
-        <b>Confirm Delete</b>. This cannot be undone.
+        Tick the polls you want to remove, then press Confirm Delete.
     </p>
 
-    <!-- The list of checkboxes is built by JS from all_polls -->
     <form method="POST" action="/admin/delete_polls" id="deleteForm">
 
         <div id="deletePollList"
@@ -138,29 +152,24 @@
             <p style="color:#888;">Loading polls...</p>
         </div>
 
-        <!-- Shown only when at least one box is ticked -->
-        <div id="deleteActions" style="display:none; gap:10px; margin-top:10px;">
-
+        <div id="deleteActions" style="display:none; margin-top:10px;">
             <div id="deleteWarning"
                  style="background:#fdecea; border:1px solid #e74c3c;
                         padding:12px; border-radius:8px; margin-bottom:12px;">
                 <b style="color:#c0392b;">⚠️ Warning:</b>
                 <span id="deleteWarningText" style="color:#c0392b;"></span>
-                All votes cast in those polls will also be permanently removed.
+                All votes will also be permanently removed.
             </div>
-
             <button type="submit"
                     style="background:#e74c3c; color:white; padding:10px 20px;
                            border:none; border-radius:6px; cursor:pointer;">
                 🗑️ Confirm Delete
             </button>
-
             <button type="button" onclick="cancelDelete()"
                     style="margin-left:10px; background:#aaa; color:white;
                            padding:10px 20px; border:none; border-radius:6px; cursor:pointer;">
                 Cancel
             </button>
-
         </div>
 
     </form>
@@ -172,11 +181,7 @@
 </div>
 
 
-<!-- ======================== -->
-<!-- JAVASCRIPT               -->
-<!-- ======================== -->
 <script>
-
 const ALL_POLLS = {{ all_polls | tojson }};
 
 const TARGET_LABEL = {
@@ -184,6 +189,15 @@ const TARGET_LABEL = {
     "drivers":    "Drivers 🚗",
     "passengers": "Passengers 🧍"
 };
+
+// Set minimum datetime to now (no past dates)
+function setMinDatetime(inputId) {
+    let now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById(inputId).min = now.toISOString().slice(0, 16);
+}
+
+setMinDatetime("createClosesAt");
 
 
 // ------------------------------------------------
@@ -194,28 +208,28 @@ function showSection(id) {
         document.getElementById(s).style.display = "none";
     });
     document.getElementById(id).style.display = "block";
-
-    if (id === "editSection")  renderPollPicker();
+    if (id === "editSection")   renderPollPicker();
     if (id === "deleteSection") renderDeleteList();
 }
 
 
 // ------------------------------------------------
-// CREATE: add option input
+// CREATE
 // ------------------------------------------------
 function addCreateOption() {
     let container = document.getElementById("optionsContainer");
     let count = container.children.length;
     let input = document.createElement("input");
-    input.name = "option_" + count;
-    input.className = "optionInput";
+    input.name        = "option_" + count;
+    input.className   = "optionInput";
     input.placeholder = "Option " + (count + 1);
+    input.style       = "margin-top:6px;";
     container.appendChild(input);
 }
 
 
 // ------------------------------------------------
-// EDIT: render poll picker
+// EDIT: poll picker with toggle-open/close
 // ------------------------------------------------
 function renderPollPicker() {
     let container = document.getElementById("pollPickerList");
@@ -227,83 +241,168 @@ function renderPollPicker() {
     }
 
     ALL_POLLS.forEach(function(poll) {
+        let wrapper = document.createElement("div");
+
         let card = document.createElement("div");
         card.style = "background:white; padding:12px; border-radius:8px; " +
                      "cursor:pointer; border:2px solid transparent;";
-        card.innerHTML = `<b>${poll.title}</b>
+
+        let closedBadge = poll.is_closed
+            ? "<span style='color:#e74c3c; font-size:0.8em; margin-left:8px;'>🔒 Closed</span>"
+            : "";
+
+        card.innerHTML = `
+            <b>${poll.title}</b>${closedBadge}
             <span style="float:right; color:#888; font-size:0.85em;">
                 ${TARGET_LABEL[poll.target] || poll.target}
             </span>`;
+
+        // Inline edit form container — appears directly under this card
+        let inlineEdit = document.createElement("div");
+        inlineEdit.style = "display:none;";
+        inlineEdit.dataset.open = "false";
+
         card.onclick = function() {
-            document.querySelectorAll("#pollPickerList div")
+            let isOpen = inlineEdit.dataset.open === "true";
+
+            // Close all other inline forms first
+            document.querySelectorAll("#pollPickerList [data-open='true']")
+                    .forEach(function(el) {
+                        el.style.display = "none";
+                        el.dataset.open  = "false";
+                    });
+            document.querySelectorAll("#pollPickerList div[style*='border']")
                     .forEach(c => c.style.border = "2px solid transparent");
-            card.style.border = "2px solid #2c3e50";
-            loadEditForm(poll.id);
+
+            if (isOpen) {
+                // Toggle closed
+                inlineEdit.style.display = "none";
+                inlineEdit.dataset.open  = "false";
+                document.getElementById("editForm").style.display = "none";
+            } else {
+                // Toggle open
+                card.style.border = "2px solid #2c3e50";
+                inlineEdit.style.display = "block";
+                inlineEdit.dataset.open  = "true";
+                loadEditForm(poll.id, inlineEdit);
+            }
         };
-        container.appendChild(card);
+
+        wrapper.appendChild(card);
+        wrapper.appendChild(inlineEdit);
+        container.appendChild(wrapper);
     });
 }
 
 
 // ------------------------------------------------
-// EDIT: load selected poll into form
+// EDIT: load poll into the inline container
 // ------------------------------------------------
-async function loadEditForm(pollId) {
+async function loadEditForm(pollId, container) {
+    container.innerHTML = "<p style='padding:10px; color:#888;'>Loading...</p>";
+
     let res  = await fetch("/admin/get_poll/" + pollId);
     let poll = await res.json();
 
-    document.getElementById("editPollId").value             = poll.id;
-    document.getElementById("editPollTitleDisplay").textContent = poll.title;
-    document.getElementById("editTitleInput").value          = poll.title;
-    document.getElementById("editTargetSelect").value        = poll.target;
-
-    let container = document.getElementById("editOptionsContainer");
+    // Build the edit form HTML inside the inline container
     container.innerHTML = "";
-    poll.options.forEach(function(opt, i) { addEditOptionRow(opt, i); });
 
-    document.getElementById("editForm").style.display = "block";
-    document.getElementById("editForm").scrollIntoView({ behavior: "smooth" });
+    let formDiv = document.createElement("div");
+    formDiv.style = "background:#f8f9fa; padding:15px; border-radius:0 0 8px 8px; " +
+                    "border:2px solid #2c3e50; border-top:none; margin-bottom:6px;";
+
+    formDiv.innerHTML = `
+        <form method="POST" action="/admin/edit_poll">
+            <input type="hidden" name="poll_id" value="${poll.id}">
+
+            <label>Poll Question</label>
+            <input name="title" value="${poll.title}" required
+                   style="width:100%; box-sizing:border-box; padding:8px;
+                          border:1px solid #ccc; border-radius:6px; margin-bottom:10px;">
+
+            <label>Who should see this?</label>
+            <select name="target"
+                    style="width:100%; padding:8px; border:1px solid #ccc;
+                           border-radius:6px; margin-bottom:10px;">
+                <option value="everyone"   ${poll.target === "everyone"   ? "selected" : ""}>Everyone</option>
+                <option value="drivers"    ${poll.target === "drivers"    ? "selected" : ""}>Drivers</option>
+                <option value="passengers" ${poll.target === "passengers" ? "selected" : ""}>Passengers</option>
+            </select>
+
+            <label>Options</label>
+            <div id="inlineOptions_${poll.id}"></div>
+            <button type="button" onclick="addInlineOption(${poll.id})"
+                    style="margin-bottom:10px;">➕ Add Option</button>
+
+            <br>
+            <label>Close poll at (optional)</label>
+            <input type="datetime-local" name="closes_at"
+                   id="inlineClosesAt_${poll.id}"
+                   value="${poll.closes_at || ""}"
+                   style="width:100%; box-sizing:border-box; padding:8px;
+                          border:1px solid #ccc; border-radius:6px; margin-bottom:10px;">
+
+            <p style="color:#c0392b; font-size:0.85em;">
+                ⚠️ Deleting an option refunds votes for it.
+            </p>
+
+            <button type="submit"
+                    style="background:#2c3e50; color:white; padding:8px 16px;
+                           border:none; border-radius:6px; cursor:pointer;">
+                💾 Save Changes
+            </button>
+        </form>`;
+
+    container.appendChild(formDiv);
+
+    // Set min date
+    let now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById(`inlineClosesAt_${poll.id}`).min = now.toISOString().slice(0, 16);
+
+    // Populate options
+    let optContainer = document.getElementById(`inlineOptions_${poll.id}`);
+    poll.options.forEach(function(opt, i) {
+        addInlineOptionRow(poll.id, opt, i);
+    });
 }
 
 
-// ------------------------------------------------
-// EDIT: single option row with delete button
-// ------------------------------------------------
-function addEditOptionRow(value, index) {
-    let container = document.getElementById("editOptionsContainer");
-    let count = index !== undefined ? index : container.children.length;
+function addInlineOptionRow(pollId, value, index) {
+    let container = document.getElementById(`inlineOptions_${pollId}`);
+    let count     = index !== undefined ? index : container.children.length;
 
     let wrapper = document.createElement("div");
-    wrapper.style = "display:flex; gap:8px; margin-bottom:6px; align-items:center;";
+    wrapper.style = "display:flex; gap:6px; margin-bottom:6px; align-items:center;";
 
     let input = document.createElement("input");
     input.name        = "edit_option_" + count;
     input.value       = value || "";
     input.placeholder = "Option " + (count + 1);
-    input.style       = "flex:1;";
+    input.style       = "flex:1; padding:7px; border:1px solid #ccc; border-radius:5px;";
 
-    let deleteBtn = document.createElement("button");
-    deleteBtn.type      = "button";
-    deleteBtn.textContent = "🗑️";
-    deleteBtn.style     = "background:#e74c3c; color:white; border:none; " +
-                          "padding:6px 10px; border-radius:5px; cursor:pointer;";
-    deleteBtn.onclick = function() {
+    let btn = document.createElement("button");
+    btn.type          = "button";
+    btn.textContent   = "🗑️";
+    btn.style         = "background:#e74c3c; color:white; border:none; " +
+                        "padding:6px 10px; border-radius:5px; cursor:pointer;";
+    btn.onclick = function() {
         wrapper.remove();
-        reindexEditOptions();
+        reindexInlineOptions(pollId);
     };
 
     wrapper.appendChild(input);
-    wrapper.appendChild(deleteBtn);
+    wrapper.appendChild(btn);
     container.appendChild(wrapper);
 }
 
-function addEditOption() {
-    let container = document.getElementById("editOptionsContainer");
-    addEditOptionRow("", container.children.length);
+function addInlineOption(pollId) {
+    let container = document.getElementById(`inlineOptions_${pollId}`);
+    addInlineOptionRow(pollId, "", container.children.length);
 }
 
-function reindexEditOptions() {
-    let inputs = document.querySelectorAll("#editOptionsContainer input");
+function reindexInlineOptions(pollId) {
+    let inputs = document.querySelectorAll(`#inlineOptions_${pollId} input`);
     inputs.forEach(function(input, i) {
         input.name        = "edit_option_" + i;
         input.placeholder = "Option " + (i + 1);
@@ -312,19 +411,15 @@ function reindexEditOptions() {
 
 function cancelEdit() {
     document.getElementById("editForm").style.display = "none";
-    document.querySelectorAll("#pollPickerList div")
-            .forEach(c => c.style.border = "2px solid transparent");
 }
 
 
 // ------------------------------------------------
-// DELETE: render checkbox list
+// DELETE
 // ------------------------------------------------
 function renderDeleteList() {
     let container = document.getElementById("deletePollList");
     container.innerHTML = "";
-
-    // Reset action bar
     document.getElementById("deleteActions").style.display = "none";
 
     if (ALL_POLLS.length === 0) {
@@ -336,10 +431,9 @@ function renderDeleteList() {
         let card = document.createElement("label");
         card.style = "display:flex; align-items:center; gap:12px; " +
                      "background:white; padding:12px; border-radius:8px; " +
-                     "cursor:pointer; border:2px solid transparent; " +
-                     "transition: border 0.2s;";
+                     "cursor:pointer; border:2px solid transparent;";
 
-        let checkbox = document.createElement("input");
+        let checkbox  = document.createElement("input");
         checkbox.type  = "checkbox";
         checkbox.name  = "delete_ids";
         checkbox.value = poll.id;
@@ -348,30 +442,27 @@ function renderDeleteList() {
 
         let textWrapper = document.createElement("div");
         textWrapper.style = "flex:1;";
+
+        let closedTag = poll.is_closed
+            ? " <span style='color:#e74c3c; font-size:0.8em;'>🔒 Closed</span>" : "";
+
         textWrapper.innerHTML = `
-            <b>${poll.title}</b>
+            <b>${poll.title}</b>${closedTag}
             <span style="float:right; color:#888; font-size:0.85em;">
                 ${TARGET_LABEL[poll.target] || poll.target}
             </span>`;
 
-        card.appendChild(checkbox);
-        card.appendChild(textWrapper);
-
-        // Highlight card when checked
         checkbox.addEventListener("change", function() {
             card.style.border = checkbox.checked
-                ? "2px solid #e74c3c"
-                : "2px solid transparent";
+                ? "2px solid #e74c3c" : "2px solid transparent";
         });
 
+        card.appendChild(checkbox);
+        card.appendChild(textWrapper);
         container.appendChild(card);
     });
 }
 
-
-// ------------------------------------------------
-// DELETE: show/hide confirm bar based on selection
-// ------------------------------------------------
 function updateDeleteActions() {
     let checked = document.querySelectorAll("#deletePollList input[type=checkbox]:checked");
     let actions = document.getElementById("deleteActions");
@@ -391,25 +482,18 @@ function updateDeleteActions() {
     }
 }
 
-
-// ------------------------------------------------
-// DELETE: cancel — untick everything and hide bar
-// ------------------------------------------------
 function cancelDelete() {
     document.querySelectorAll("#deletePollList input[type=checkbox]")
             .forEach(function(cb) {
                 cb.checked = false;
-                // Reset card border
-                if (cb.parentElement) {
-                    cb.parentElement.style.border = "2px solid transparent";
-                }
+                if (cb.parentElement) cb.parentElement.style.border = "2px solid transparent";
             });
     document.getElementById("deleteActions").style.display = "none";
 }
 
 
 // ------------------------------------------------
-// AUTO-OPEN correct section after a POST
+// AUTO-OPEN after POST
 // ------------------------------------------------
 {% if success %}
     document.addEventListener("DOMContentLoaded", function() {
@@ -419,15 +503,11 @@ function cancelDelete() {
 {% endif %}
 
 {% if edit_success %}
-    document.addEventListener("DOMContentLoaded", function() {
-        showSection("editSection");
-    });
+    document.addEventListener("DOMContentLoaded", function() { showSection("editSection"); });
 {% endif %}
 
 {% if delete_success %}
-    document.addEventListener("DOMContentLoaded", function() {
-        showSection("deleteSection");
-    });
+    document.addEventListener("DOMContentLoaded", function() { showSection("deleteSection"); });
 {% endif %}
 
 </script>

@@ -92,7 +92,6 @@ def apply_partial_assignment(p_addresses, p_groups, capacities):
             unassigned_groups.append(group)
 
     assigned_addresses = p_addresses[:len(assigned_groups)]
-
     unassigned_names = [name for group in unassigned_groups for name in group]
 
     return assigned_addresses, assigned_groups, unassigned_names
@@ -103,15 +102,19 @@ def apply_partial_assignment(p_addresses, p_groups, capacities):
 # --------------------------
 def optimize_morning(drivers, passengers, church):
 
-    drivers = [d for d in drivers if d["morning"]]
-    passengers = [p for p in passengers if p["morning"]]
+    if not drivers:
+        return {"error": ["❌ No drivers selected"]}
+    if not passengers:
+        return {"error": ["❌ No passengers selected"]}
 
     driver_addresses = [d["address"] for d in drivers]
     capacities = [d["capacity"] for d in drivers]
 
+    if not any(capacities):
+        return {"error": ["❌ No driver has a capacity set"]}
+
     p_addresses, p_groups = group_and_split(passengers, max(capacities))
 
-    # ✅ Partial system applied here
     p_addresses, p_groups, unassigned = apply_partial_assignment(
         p_addresses, p_groups, capacities
     )
@@ -129,19 +132,18 @@ def optimize_morning(drivers, passengers, church):
     try:
         time_matrix, dist_matrix = build_matrices(coords)
     except:
-        return {"error": ["❌ Routing failed"]}
+        return {"error": ["❌ Routing failed — OSRM service unavailable"]}
 
     time_matrix = [[int(t * TRAFFIC_MULTIPLIER) for t in row] for row in time_matrix]
 
     church_index = len(all_addresses) - 1
-
-    demands = [0]*len(driver_addresses) + [len(g) for g in p_groups] + [0]
+    demands = [0] * len(driver_addresses) + [len(g) for g in p_groups] + [0]
 
     manager = pywrapcp.RoutingIndexManager(
         len(time_matrix),
         len(drivers),
         list(range(len(drivers))),
-        [church_index]*len(drivers)
+        [church_index] * len(drivers)
     )
 
     routing = pywrapcp.RoutingModel(manager)
@@ -172,7 +174,7 @@ def optimize_morning(drivers, passengers, church):
     solution = routing.SolveWithParameters(params)
 
     if not solution:
-        return {"error": ["❌ No solution found"]}
+        return {"error": ["❌ No solution found — try adding more drivers or reducing passengers"]}
 
     results = []
     total_time = 0
@@ -225,14 +227,18 @@ def optimize_morning(drivers, passengers, church):
 # --------------------------
 def optimize_return(drivers, passengers, church):
 
-    drivers = [d for d in drivers if d["is_returning"]]
-    passengers = [p for p in passengers if p["is_returning"]]
+    if not drivers:
+        return {"error": ["❌ No drivers selected"]}
+    if not passengers:
+        return {"error": ["❌ No passengers selected"]}
 
     capacities = [d["capacity"] for d in drivers]
 
+    if not any(capacities):
+        return {"error": ["❌ No driver has a capacity set"]}
+
     p_addresses, p_groups = group_and_split(passengers, max(capacities))
 
-    # ✅ Partial system
     p_addresses, p_groups, unassigned = apply_partial_assignment(
         p_addresses, p_groups, capacities
     )
@@ -250,7 +256,7 @@ def optimize_return(drivers, passengers, church):
     try:
         time_matrix, dist_matrix = build_matrices(coords)
     except:
-        return {"error": ["❌ Routing failed"]}
+        return {"error": ["❌ Routing failed — OSRM service unavailable"]}
 
     time_matrix = [[int(t * TRAFFIC_MULTIPLIER) for t in row] for row in time_matrix]
 
@@ -258,7 +264,7 @@ def optimize_return(drivers, passengers, church):
     passenger_start = 1
     driver_start = 1 + len(p_addresses)
 
-    demands = [0] + [len(g) for g in p_groups] + [0]*len(drivers)
+    demands = [0] + [len(g) for g in p_groups] + [0] * len(drivers)
 
     starts = [church_index] * len(drivers)
     ends = list(range(driver_start, driver_start + len(drivers)))
@@ -298,7 +304,7 @@ def optimize_return(drivers, passengers, church):
     solution = routing.SolveWithParameters(params)
 
     if not solution:
-        return {"error": ["❌ No return route found"]}
+        return {"error": ["❌ No return route found — try adding more drivers"]}
 
     results = []
     total_time = 0
@@ -344,76 +350,3 @@ def optimize_return(drivers, passengers, church):
         "total_distance_km": round(total_distance / 1000, 2),
         "unassigned": unassigned
     }
-
-
-# --------------------------
-# MAIN
-# --------------------------
-def main():
-
-    mode = "both"
-
-    drivers = [
-        {"name": "Driver A", "address": "105 Couling Crescent, Guelph, ON", "capacity": 5, "morning": True, "is_returning": True},
-        {"name": "Driver B", "address": "191 Elmira Rd S, Guelph, ON", "capacity": 4, "morning": True, "is_returning": True},
-        {"name": "Driver C", "address": "298 Metcalfe St, Guelph, ON", "capacity": 3, "morning": False, "is_returning": True},
-    ]
-
-    passengers = [
-        {"name": "Joshua", "address": "40 Paul Ave, Guelph, ON", "morning": True, "is_returning": True},
-        {"name": "Ethan", "address": "40 Paul Ave, Guelph, ON", "morning": True, "is_returning": True},
-        {"name": "Sam", "address": "40 Paul Ave, Guelph, ON", "morning": True, "is_returning": False},
-        {"name": "Sophia", "address": "40 Paul Ave, Guelph, ON", "morning": True, "is_returning": True},
-
-        {"name": "Emma", "address": "50 Quebec St, Guelph, ON", "morning": True, "is_returning": True},
-        {"name": "Noah", "address": "50 Quebec St, Guelph, ON", "morning": True, "is_returning": True},
-        {"name": "Mason", "address": "50 Quebec St, Guelph, ON", "morning": True, "is_returning": True},
-
-        {"name": "Liam", "address": "601 Scottsdale Drive, Guelph, ON", "morning": True, "is_returning": True},
-        {"name": "Olivia", "address": "601 Scottsdale Drive, Guelph, ON", "morning": True, "is_returning": True},
-
-        {"name": "Ava", "address": "67 Ellis Ave, Kitchener, ON", "morning": True, "is_returning": True},
-        {"name": "Isabella", "address": "67 Ellis Ave, Kitchener, ON", "morning": True, "is_returning": True},
-    ]
-
-    church = "114 Lane St, Guelph, ON"
-
-    if mode in ["morning", "both"]:
-        print("\n🌅 MORNING ROUTE\n")
-        result = optimize_morning(drivers, passengers, church)
-
-        if "error" in result:
-            print(result["error"])
-        else:
-            for r in result["routes"]:
-                print(r["driver"])
-                for stop in r["stops"]:
-                    print(f"  Pick up {', '.join(stop['passengers'])} from {stop['address']}")
-                print(f"  Time: {r['time_min']} min | Distance: {r['distance_km']} km\n")
-
-            print("TOTAL TIME:", result["total_time_min"], "min")
-            print("TOTAL DISTANCE:", result["total_distance_km"], "km")
-
-            if result["unassigned"]:
-                print("\n⚠️ Unassigned passengers (morning):")
-                print(", ".join(result["unassigned"]))
-
-    if mode in ["return", "both"]:
-        print("\n🌙 RETURN ROUTE\n")
-        result = optimize_return(drivers, passengers, church)
-
-        if "error" in result:
-            print(result["error"])
-        else:
-            for r in result["routes"]:
-                print(r["driver"])
-                for stop in r["stops"]:
-                    print(f"  Drop off {', '.join(stop['passengers'])} at {stop['address']}")
-                print(f"  Time: {r['time_min']} min | Distance: {r['distance_km']} km\n")
-
-            print("TOTAL TIME:", result["total_time_min"], "min")
-            print("TOTAL DISTANCE:", result["total_distance_km"], "km")
-
-            if result["unassigned"]:
-                print("\n⚠️ Unassigned passengers (return):")
-                print(", ".join(result["unassigned"]))

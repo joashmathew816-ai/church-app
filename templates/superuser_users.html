@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>👑 Manage Users</h2>
+
+<p style="color:#555; font-size:0.95em;">
+    ⚠️ Addresses must be selected from the dropdown.
+    If the exact address isn't listed, pick the closest street or option.
+</p>
+
+{% for u in users %}
+<div style="background:white; padding:20px; border-radius:10px;
+            margin-bottom:20px; border:1px solid #ddd;"
+     id="user_card_{{ u.id }}">
+
+    <div style="display:flex; justify-content:space-between;
+                align-items:center; margin-bottom:12px;">
+        <b style="font-size:1.05em;">{{ u.first_name }} {{ u.last_name }}</b>
+        <span style="background:#eaf4fb; color:#2980b9; padding:4px 10px;
+                     border-radius:12px; font-size:0.85em;">{{ u.role }}</span>
+    </div>
+
+    <div id="msg_{{ u.id }}" style="display:none; margin-bottom:10px;"></div>
+
+    <form method="POST" action="/superuser/users"
+          onsubmit="return validateForm({{ u.id }})">
+        <input type="hidden" name="user_id" value="{{ u.id }}">
+
+        <label style="font-weight:bold;">Role</label>
+        {% if u.id == current_user.id %}
+            <input value="Superuser (you)" disabled
+                   style="background:#ddd; width:100%; box-sizing:border-box;
+                          padding:8px; border:1px solid #ccc; border-radius:6px;">
+            <input type="hidden" name="role" value="superuser">
+            <small style="color:#e74c3c;">You cannot change your own role.</small>
+        {% else %}
+            <select name="role"
+                    style="width:100%; box-sizing:border-box; padding:8px;
+                           border:1px solid #ccc; border-radius:6px;">
+                <option value="user"
+                    {% if u.role == "user" %}selected{% endif %}>User</option>
+                <option value="admin"
+                    {% if u.role == "admin" %}selected{% endif %}>Admin</option>
+                <option value="superuser"
+                    {% if u.role == "superuser" %}selected{% endif %}>Superuser</option>
+            </select>
+        {% endif %}
+
+        <br><br>
+
+        <label style="font-weight:bold;">Phone Number</label>
+        <input name="phone" value="{{ u.phone or '' }}"
+               placeholder="e.g. 519-555-1234"
+               style="width:100%; box-sizing:border-box; padding:8px;
+                      border:1px solid #ccc; border-radius:6px;">
+
+        <br><br>
+
+        <label style="font-weight:bold;">Address</label>
+        <div class="autocomplete-wrapper">
+            <input name="address" id="address_{{ u.id }}"
+                   value="{{ u.address or '' }}"
+                   placeholder="Start typing address..."
+                   required autocomplete="off"
+                   style="width:100%; box-sizing:border-box; padding:8px;
+                          border:1px solid #ccc; border-radius:6px;">
+            <div class="autocomplete-list" id="dropdown_{{ u.id }}"
+                 style="display:none;"></div>
+        </div>
+        <span class="field-error" id="addressError_{{ u.id }}"></span>
+        <small style="color:#888;">
+            Must select from dropdown. If not found, pick the closest street.
+        </small>
+
+        <br><br>
+
+        <label style="font-weight:bold; display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" name="is_driver" id="driverCheck_{{ u.id }}"
+                   {% if u.is_driver %}checked{% endif %}
+                   onchange="toggleCapacity({{ u.id }})">
+            Is a driver
+        </label>
+        <p style="color:#888; font-size:0.85em; margin-top:4px;">
+            ⚠️ Changing driver status removes votes on ineligible polls.
+        </p>
+
+        <div id="capacityDiv_{{ u.id }}"
+             style="display:{{ 'block' if u.is_driver else 'none' }};
+                    margin-top:6px; margin-bottom:6px;">
+            <label style="font-weight:bold;">Capacity (1–8)</label>
+            <input type="number" name="capacity" id="capacityInput_{{ u.id }}"
+                   min="1" max="8" value="{{ u.capacity or '' }}"
+                   style="width:100px; padding:8px; border:1px solid #ccc;
+                          border-radius:6px;">
+            <span class="field-error" id="capacityError_{{ u.id }}"></span>
+        </div>
+
+        <br>
+        <button type="submit"
+                style="background:#2c3e50; color:white; padding:10px 24px;
+                       border:none; border-radius:6px; cursor:pointer;">
+            💾 Save Changes
+        </button>
+    </form>
+
+    {% if u.id != current_user.id %}
+    <form method="POST" action="/superuser/delete_user/{{ u.id }}"
+          onsubmit="return confirmDelete('{{ u.first_name }} {{ u.last_name }}');"
+          style="margin-top:12px;">
+        <button type="submit"
+                style="background:#e74c3c; color:white; padding:8px 20px;
+                       border:none; border-radius:6px; cursor:pointer;
+                       font-size:0.9em;">
+            🗑️ Delete Account
+        </button>
+    </form>
+    {% endif %}
+
+</div>
+{% endfor %}
+
+<script>
+let addressConfirmed = {};
+{% for u in users %}
+    addressConfirmed[{{ u.id }}] = {{ 'true' if u.address else 'false' }};
+{% endfor %}
+
+function toggleCapacity(userId) {
+    document.getElementById("capacityDiv_" + userId).style.display =
+        document.getElementById("driverCheck_" + userId).checked ? "block" : "none";
+}
+
+function setupAutocomplete(userId) {
+    let input    = document.getElementById("address_" + userId);
+    let dropdown = document.getElementById("dropdown_" + userId);
+    let timer;
+
+    input.addEventListener("input", function() {
+        addressConfirmed[userId] = false;
+        clearTimeout(timer);
+        let query = this.value.trim();
+        if (query.length < 3) { dropdown.style.display = "none"; return; }
+
+        timer = setTimeout(function() {
+            fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q="
+                  + encodeURIComponent(query), { headers: { "Accept-Language": "en" } })
+            .then(r => r.json())
+            .then(function(results) {
+                dropdown.innerHTML = "";
+                if (!results.length) { dropdown.style.display = "none"; return; }
+                results.forEach(function(place) {
+                    let item = document.createElement("div");
+                    item.textContent = place.display_name;
+                    item.onclick = function() {
+                        input.value              = place.display_name;
+                        dropdown.style.display   = "none";
+                        addressConfirmed[userId] = true;
+                        input.style.borderColor  = "";
+                        document.getElementById("addressError_" + userId).textContent = "";
+                    };
+                    dropdown.appendChild(item);
+                });
+                dropdown.style.display = "block";
+            })
+            .catch(() => { dropdown.style.display = "none"; });
+        }, 400);
+    });
+
+    document.addEventListener("click", function(e) {
+        if (!e.target.closest(".autocomplete-wrapper"))
+            dropdown.style.display = "none";
+    });
+}
+
+function validateForm(userId) {
+    let valid = true;
+
+    if (!addressConfirmed[userId]) {
+        let err = document.getElementById("addressError_" + userId);
+        let inp = document.getElementById("address_" + userId);
+        err.textContent      = "Please select the address from the dropdown. " +
+                               "If not found, pick the closest street or option.";
+        inp.style.borderColor = "#e74c3c";
+        valid = false;
+    }
+
+    if (document.getElementById("driverCheck_" + userId).checked) {
+        let capInput = document.getElementById("capacityInput_" + userId);
+        let cap      = parseInt(capInput.value);
+        if (!capInput.value || cap < 1 || cap > 8) {
+            document.getElementById("capacityError_" + userId).textContent =
+                "Capacity must be between 1 and 8.";
+            capInput.style.borderColor = "#e74c3c";
+            valid = false;
+        }
+    }
+
+    if (!valid) {
+        document.getElementById("user_card_" + userId)
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    return valid;
+}
+
+function confirmDelete(name) {
+    return confirm(
+        "Permanently delete the account for " + name + "?\n\n" +
+        "All their votes and data will be removed. This cannot be undone."
+    );
+}
+
+function showMessages() {
+    let params  = new URLSearchParams(window.location.search);
+    let savedId = params.get("saved");
+    let errorId = params.get("error_id");
+    let deleted = params.get("deleted");
+
+    if (deleted) {
+        let banner = document.createElement("div");
+        banner.style.cssText = "background:#eafaf1; border:1px solid #27ae60; " +
+            "padding:12px; border-radius:8px; color:#27ae60; margin-bottom:16px;";
+        banner.textContent = "✅ Account deleted successfully.";
+        document.querySelector("h2").insertAdjacentElement("afterend", banner);
+    }
+
+    if (savedId) {
+        let div = document.getElementById("msg_" + savedId);
+        if (div) {
+            div.style.cssText = "display:block; background:#eafaf1; " +
+                "border:1px solid #27ae60; padding:10px; border-radius:6px; color:#27ae60;";
+            div.textContent = "✅ Changes saved!";
+            document.getElementById("user_card_" + savedId)
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }
+
+    if (errorId) {
+        let div = document.getElementById("msg_" + errorId);
+        if (div) {
+            div.style.cssText = "display:block; background:#fdecea; " +
+                "border:1px solid #e74c3c; padding:10px; border-radius:6px; color:#c0392b;";
+            div.textContent = decodeURIComponent(
+                params.get("error_msg") || "An error occurred.");
+            document.getElementById("user_card_" + errorId)
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    {% for u in users %}
+        setupAutocomplete({{ u.id }});
+    {% endfor %}
+    showMessages();
+});
+</script>
+
+{% endblock %}

@@ -3,7 +3,6 @@
 <head>
     <title>Sign Up</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <style>
         body {
             font-family: Arial;
@@ -11,15 +10,13 @@
             margin-top: 60px;
             background: #f4f6f8;
         }
-
         .card {
             background: white;
-            max-width: 400px;
+            max-width: 420px;
             margin: 0 auto;
             padding: 30px;
             border-radius: 12px;
         }
-
         label {
             display: block;
             text-align: left;
@@ -28,7 +25,6 @@
             font-weight: bold;
             font-size: 0.9em;
         }
-
         input, select {
             padding: 10px;
             width: 100%;
@@ -37,7 +33,6 @@
             border-radius: 6px;
             font-size: 1em;
         }
-
         button {
             margin-top: 20px;
             padding: 12px;
@@ -49,17 +44,10 @@
             font-size: 1em;
             cursor: pointer;
         }
-
-        .autocomplete-wrapper {
-            position: relative;
-            text-align: left;
-        }
-
+        .autocomplete-wrapper { position: relative; text-align: left; }
         .autocomplete-list {
             position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
+            top: 100%; left: 0; right: 0;
             background: white;
             border: 1px solid #ccc;
             border-top: none;
@@ -69,25 +57,31 @@
             z-index: 9999;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
-
         .autocomplete-list div {
             padding: 10px 12px;
             cursor: pointer;
             font-size: 0.9em;
             text-align: left;
         }
-
-        .autocomplete-list div:hover {
-            background: #f0f4f8;
+        .autocomplete-list div:hover { background: #f0f4f8; }
+        .field-error {
+            color: #e74c3c;
+            font-size: 0.82em;
+            display: block;
+            text-align: left;
+            margin-top: 3px;
         }
     </style>
 </head>
-
 <body>
 <div class="card">
     <h2>Sign Up</h2>
 
-    <form method="POST">
+    {% if error %}
+        <p style="color:red; text-align:left;">{{ error }}</p>
+    {% endif %}
+
+    <form method="POST" id="signupForm">
 
         <label>First Name</label>
         <input name="first_name" required>
@@ -103,9 +97,16 @@
 
         <label>Address</label>
         <div class="autocomplete-wrapper">
-            <input name="address" id="addressInput" placeholder="Start typing your address..." required autocomplete="off">
+            <input name="address" id="addressInput"
+                   placeholder="Start typing your address..."
+                   required autocomplete="off">
             <div class="autocomplete-list" id="addressDropdown" style="display:none;"></div>
         </div>
+        <span class="field-error" id="addressError"></span>
+        <small style="color:#888; text-align:left; display:block; margin-top:2px;">
+            Must select from dropdown. If your exact address isn't listed,
+            pick the closest street or option.
+        </small>
 
         <label>I am a driver</label>
         <select name="is_driver" id="driverSelect" onchange="toggleCapacity()">
@@ -115,75 +116,93 @@
 
         <div id="capacityDiv" style="display:none; margin-top:10px;">
             <label>Capacity (1–8)</label>
-            <input type="number" name="capacity" min="1" max="8" placeholder="How many passengers can you carry?">
+            <input type="number" name="capacity" id="capacityInput"
+                   min="1" max="8"
+                   placeholder="How many passengers can you carry?">
+            {% if error_capacity %}
+                <span class="field-error">{{ error_capacity }}</span>
+            {% endif %}
+            <span class="field-error" id="capacityError"></span>
         </div>
 
-        <br>
         <button type="submit">Create Account</button>
-
     </form>
-
-    {% if error %}
-        <p style="color:red;">{{ error }}</p>
-    {% endif %}
 
     <p>Already have an account? <a href="/login">Login</a></p>
 </div>
 
 <script>
+let addressConfirmed = false;
+
 function toggleCapacity() {
-    let val = document.getElementById("driverSelect").value;
-    document.getElementById("capacityDiv").style.display = val === "yes" ? "block" : "none";
+    document.getElementById("capacityDiv").style.display =
+        document.getElementById("driverSelect").value === "yes" ? "block" : "none";
 }
 
-// Address autocomplete
 let debounceTimer;
+let addressInput    = document.getElementById("addressInput");
+let addressDropdown = document.getElementById("addressDropdown");
 
-document.getElementById("addressInput").addEventListener("input", function() {
+addressInput.addEventListener("input", function() {
+    addressConfirmed = false;
     clearTimeout(debounceTimer);
     let query = this.value.trim();
-    let dropdown = document.getElementById("addressDropdown");
-
-    if (query.length < 3) {
-        dropdown.style.display = "none";
-        return;
-    }
+    if (query.length < 3) { addressDropdown.style.display = "none"; return; }
 
     debounceTimer = setTimeout(function() {
-        fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q=" + encodeURIComponent(query), {
-            headers: { "Accept-Language": "en" }
-        })
+        fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q="
+              + encodeURIComponent(query), { headers: { "Accept-Language": "en" } })
         .then(r => r.json())
         .then(function(results) {
-            dropdown.innerHTML = "";
-            if (results.length === 0) {
-                dropdown.style.display = "none";
-                return;
-            }
+            addressDropdown.innerHTML = "";
+            if (!results.length) { addressDropdown.style.display = "none"; return; }
             results.forEach(function(place) {
                 let item = document.createElement("div");
                 item.textContent = place.display_name;
                 item.onclick = function() {
-                    document.getElementById("addressInput").value = place.display_name;
-                    dropdown.style.display = "none";
+                    addressInput.value            = place.display_name;
+                    addressDropdown.style.display = "none";
+                    addressConfirmed              = true;
+                    addressInput.style.borderColor = "";
+                    document.getElementById("addressError").textContent = "";
                 };
-                dropdown.appendChild(item);
+                addressDropdown.appendChild(item);
             });
-            dropdown.style.display = "block";
+            addressDropdown.style.display = "block";
         })
-        .catch(function() {
-            dropdown.style.display = "none";
-        });
+        .catch(() => { addressDropdown.style.display = "none"; });
     }, 400);
 });
 
-// Close dropdown when clicking outside
 document.addEventListener("click", function(e) {
-    if (!e.target.closest(".autocomplete-wrapper")) {
-        document.getElementById("addressDropdown").style.display = "none";
+    if (!e.target.closest(".autocomplete-wrapper"))
+        addressDropdown.style.display = "none";
+});
+
+document.getElementById("signupForm").addEventListener("submit", function(e) {
+    let valid = true;
+
+    if (!addressConfirmed) {
+        document.getElementById("addressError").textContent =
+            "Please select your address from the dropdown. " +
+            "If your exact address isn't listed, pick the closest option.";
+        addressInput.style.borderColor = "#e74c3c";
+        valid = false;
     }
+
+    if (document.getElementById("driverSelect").value === "yes") {
+        let capInput = document.getElementById("capacityInput");
+        let cap      = parseInt(capInput.value);
+        if (!capInput.value || cap < 1 || cap > 8) {
+            document.getElementById("capacityError").textContent =
+                "Capacity must be between 1 and 8.";
+            capInput.style.borderColor = "#e74c3c";
+            valid = false;
+        }
+    }
+
+    if (!valid) e.preventDefault();
 });
 </script>
-
 </body>
 </html>
