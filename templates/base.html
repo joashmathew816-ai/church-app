@@ -3,8 +3,8 @@
 <head>
     <title>Church App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#2c3e50">
-    <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 
     <style>
@@ -119,15 +119,15 @@
             document.getElementById("overlay").style.display = "none";
         }
 
-        // Register service worker for PWA
+        // Register service worker
         if ("serviceWorker" in navigator) {
             window.addEventListener("load", function() {
-                navigator.serviceWorker.register("/static/sw.js")
+                navigator.serviceWorker.register("/sw.js", { scope: "/" })
                     .then(function(reg) {
-                        console.log("Service worker registered:", reg.scope);
+                        console.log("SW registered, scope:", reg.scope);
                     })
                     .catch(function(err) {
-                        console.log("Service worker failed:", err);
+                        console.log("SW registration failed:", err);
                     });
             });
         }

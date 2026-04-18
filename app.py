@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, jsonify, send_from_directory
+from flask import Flask, make_response, render_template, request, redirect, jsonify, send_from_directory
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Poll, PollResponse, Feedback
@@ -69,10 +69,20 @@ def user_eligible_for_poll(user, poll):
 # ----------------------
 # SERVICE WORKER
 # ----------------------
-@app.route("/static/sw.js")
+@app.route("/sw.js")
 def service_worker():
-    return send_from_directory("static", "sw.js",
-                               mimetype="application/javascript")
+    response = make_response(
+        send_from_directory("static", "sw.js")
+    )
+    response.headers["Content-Type"] = "application/javascript"
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
+
+# Serve manifest
+@app.route("/manifest.json")
+def manifest():
+    return send_from_directory("static", "manifest.json",
+                               mimetype="application/manifest+json")
 
 
 # ----------------------
