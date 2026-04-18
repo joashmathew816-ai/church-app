@@ -3,6 +3,10 @@
 <head>
     <title>Church App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2c3e50">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
     <style>
         body {
             margin: 0;
@@ -51,10 +55,7 @@
         }
 
         .sidebar a:hover { background: #2c3e50; }
-
-        .sidebar a.logout-link {
-            color: #e74c3c;
-        }
+        .sidebar a.logout-link { color: #e74c3c; }
 
         .overlay {
             display: none;
@@ -117,6 +118,19 @@
             document.getElementById("sidebar").style.left = "-260px";
             document.getElementById("overlay").style.display = "none";
         }
+
+        // Register service worker for PWA
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", function() {
+                navigator.serviceWorker.register("/static/sw.js")
+                    .then(function(reg) {
+                        console.log("Service worker registered:", reg.scope);
+                    })
+                    .catch(function(err) {
+                        console.log("Service worker failed:", err);
+                    });
+            });
+        }
     </script>
 </head>
 
@@ -131,8 +145,6 @@
 </div>
 
 <div id="sidebar" class="sidebar">
-
-    <!-- TOP SECTION -->
     <div class="sidebar-top">
         <a href="/dashboard">🏠 Dashboard</a>
         <a href="/profile">👤 Profile</a>
@@ -148,7 +160,6 @@
         {% endif %}
     </div>
 
-    <!-- BOTTOM SECTION -->
     <div class="sidebar-bottom">
         <a href="/feedback">💬 Feedback</a>
 
@@ -163,7 +174,6 @@
 
         <a href="/logout" class="logout-link">🚪 Logout</a>
     </div>
-
 </div>
 
 <div id="overlay" class="overlay" onclick="closeSidebar()"></div>

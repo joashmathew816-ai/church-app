@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, jsonify
+from flask import Flask, render_template, request, redirect, jsonify, send_from_directory
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Poll, PollResponse, Feedback
@@ -65,6 +65,14 @@ def user_eligible_for_poll(user, poll):
     if poll.target == "passengers" and not user.is_driver:
         return True
     return False
+
+# ----------------------
+# SERVICE WORKER
+# ----------------------
+@app.route("/static/sw.js")
+def service_worker():
+    return send_from_directory("static", "sw.js",
+                               mimetype="application/javascript")
 
 
 # ----------------------
