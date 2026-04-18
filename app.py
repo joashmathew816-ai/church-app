@@ -72,18 +72,24 @@ def user_eligible_for_poll(user, poll):
 @app.route("/sw.js")
 def service_worker():
     response = make_response(
-        send_from_directory("static", "sw.js")
+        send_from_directory(
+            app.static_folder, "sw.js"
+        )
     )
     response.headers["Content-Type"] = "application/javascript"
     response.headers["Service-Worker-Allowed"] = "/"
     return response
 
-# Serve manifest
+
 @app.route("/manifest.json")
 def manifest():
-    return send_from_directory("static", "manifest.json",
-                               mimetype="application/manifest+json")
-
+    response = make_response(
+        send_from_directory(
+            app.static_folder, "manifest.json"
+        )
+    )
+    response.headers["Content-Type"] = "application/manifest+json"
+    return response
 
 # ----------------------
 # HOME
