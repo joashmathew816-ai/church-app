@@ -5,46 +5,52 @@
 <h2>🚗 Generate Routes</h2>
 
 <!-- DESTINATION ADDRESS -->
-<div style="background:white; padding:20px; border-radius:10px; margin-bottom:20px;">
+<div style="background:white; padding:20px; border-radius:10px; margin-bottom:16px;">
     <label><b>Destination Address</b></label>
-    <p style="color:#888; font-size:0.85em; margin-top:2px;">
+    <p style="color:#888; font-size:0.85em; margin:4px 0 8px 0;">
         e.g. church, campsite, event venue
     </p>
     <div class="autocomplete-wrapper">
         <input id="churchAddress"
                placeholder="Start typing the destination address..."
-               autocomplete="off"
-               style="width:100%; box-sizing:border-box; padding:10px;
-                      border:1px solid #ccc; border-radius:6px; font-size:1em;">
+               autocomplete="off">
         <div class="autocomplete-list" id="churchDropdown" style="display:none;"></div>
     </div>
 </div>
 
 <!-- MODE -->
-<div style="background:white; padding:20px; border-radius:10px; margin-bottom:20px;">
-    <label><b>Route Direction</b></label><br><br>
-    <label style="margin-right:20px;">
-        <input type="radio" name="mode" value="morning" checked> 🌅 Morning (to destination)
-    </label>
-    <label style="margin-right:20px;">
-        <input type="radio" name="mode" value="return"> 🌙 Return (from destination)
-    </label>
-    <label>
-        <input type="radio" name="mode" value="both"> 🔄 Both
-    </label>
+<div style="background:white; padding:16px 20px; border-radius:10px; margin-bottom:16px;">
+    <p style="font-weight:bold; margin:0 0 10px 0;">Route Direction</p>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        <label style="font-weight:normal; display:flex; align-items:center; gap:10px; margin:0;">
+            <input type="radio" name="mode" value="morning" checked
+                   style="width:18px; height:18px; flex-shrink:0;">
+            🌅 Morning (to destination)
+        </label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:10px; margin:0;">
+            <input type="radio" name="mode" value="return"
+                   style="width:18px; height:18px; flex-shrink:0;">
+            🌙 Return (from destination)
+        </label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:10px; margin:0;">
+            <input type="radio" name="mode" value="both"
+                   style="width:18px; height:18px; flex-shrink:0;">
+            🔄 Both
+        </label>
+    </div>
 </div>
 
 <!-- STEP 1: DRIVERS -->
-<div style="background:white; padding:20px; border-radius:10px; margin-bottom:20px;">
-    <h3>Step 1 — Select Driver Poll</h3>
-    <p style="color:#888; font-size:0.9em;">
-        Click a poll to expand it, then click the option that means "I am a driver".
-        Click the poll again to collapse it.
+<div style="background:white; padding:20px; border-radius:10px; margin-bottom:16px;">
+    <h3 style="margin-top:0;">Step 1 — Select Driver Poll</h3>
+    <p style="color:#888; font-size:0.9em; margin-top:0;">
+        Tap a poll to expand it, then tap the option that means "I am a driver".
+        Tap the poll again to collapse it.
     </p>
     <div id="driverPollList" style="display:flex; flex-direction:column; gap:8px;">
         <p style="color:#aaa;">Loading polls...</p>
     </div>
-    <div id="driverPreview" style="display:none; margin-top:15px;
+    <div id="driverPreview" style="display:none; margin-top:12px;
          background:#eafaf1; padding:12px; border-radius:8px;">
         <b>✅ Drivers:</b>
         <span id="driverPreviewNames" style="color:#27ae60;"></span>
@@ -52,16 +58,16 @@
 </div>
 
 <!-- STEP 2: PASSENGERS -->
-<div style="background:white; padding:20px; border-radius:10px; margin-bottom:20px;">
-    <h3>Step 2 — Select Passenger Poll</h3>
-    <p style="color:#888; font-size:0.9em;">
-        Click a poll to expand it, then click the option that means "I need a ride".
-        Click the poll again to collapse it.
+<div style="background:white; padding:20px; border-radius:10px; margin-bottom:16px;">
+    <h3 style="margin-top:0;">Step 2 — Select Passenger Poll</h3>
+    <p style="color:#888; font-size:0.9em; margin-top:0;">
+        Tap a poll to expand it, then tap the option that means "I need a ride".
+        Tap the poll again to collapse it.
     </p>
     <div id="passengerPollList" style="display:flex; flex-direction:column; gap:8px;">
         <p style="color:#aaa;">Loading polls...</p>
     </div>
-    <div id="passengerPreview" style="display:none; margin-top:15px;
+    <div id="passengerPreview" style="display:none; margin-top:12px;
          background:#eaf4fb; padding:12px; border-radius:8px;">
         <b>✅ Passengers:</b>
         <span id="passengerPreviewNames" style="color:#2980b9;"></span>
@@ -69,9 +75,9 @@
 </div>
 
 <!-- GENERATE -->
-<div style="margin-bottom:20px;">
+<div style="margin-bottom:16px;">
     <button id="generateBtn" onclick="generateRoutes()"
-            style="background:#2c3e50; color:white; padding:14px 30px;
+            style="background:#2c3e50; color:white; padding:14px;
                    border:none; border-radius:8px; font-size:1.1em;
                    cursor:pointer; width:100%;">
         🚗 Generate Routes
@@ -80,8 +86,8 @@
 
 <!-- LOADING -->
 <div id="loadingSection" style="display:none; text-align:center; padding:30px;">
-    <p style="font-size:1.1em; color:#555;">
-        ⏳ Calculating optimized routes... this may take up to 30 seconds.
+    <p style="font-size:1em; color:#555;">
+        ⏳ Calculating optimized routes...<br>this may take up to 30 seconds.
     </p>
 </div>
 
@@ -93,22 +99,25 @@
         <div id="morningRouteCards"></div>
         <div id="morningUnassigned"></div>
         <div id="morningTotals"
-             style="background:#f8f9fa; padding:12px; border-radius:8px; margin-top:10px;">
+             style="background:#f8f9fa; padding:12px;
+                    border-radius:8px; margin-top:10px;">
         </div>
     </div>
-    <div id="returnResults" style="display:none; margin-top:30px;">
+    <div id="returnResults" style="display:none; margin-top:20px;">
         <h3>🌙 Return Routes (from destination)</h3>
         <div id="returnRouteCards"></div>
         <div id="returnUnassigned"></div>
         <div id="returnTotals"
-             style="background:#f8f9fa; padding:12px; border-radius:8px; margin-top:10px;">
+             style="background:#f8f9fa; padding:12px;
+                    border-radius:8px; margin-top:10px;">
         </div>
     </div>
 </div>
 
 <!-- ERROR -->
-<div id="errorBox" style="display:none; background:#fdecea; border:1px solid #e74c3c;
-     padding:15px; border-radius:8px; color:#c0392b; margin-top:10px;">
+<div id="errorBox" style="display:none; background:#fdecea;
+     border:1px solid #e74c3c; padding:15px; border-radius:8px;
+     color:#c0392b; margin-top:10px;">
 </div>
 
 
@@ -135,7 +144,7 @@ window.onload = async function() {
 
 
 // ------------------------------------------------
-// POLL LIST WITH TOGGLE + INLINE OPTIONS
+// POLL LIST
 // ------------------------------------------------
 function renderPollList(containerId, role) {
     let container = document.getElementById(containerId);
@@ -155,65 +164,59 @@ function renderPollList(containerId, role) {
     allPolls.forEach(function(poll) {
         let wrapper = document.createElement("div");
 
-        // Poll card (header)
         let card = document.createElement("div");
         card.style = "padding:12px; background:#f8f9fa; border-radius:8px; " +
-                     "cursor:pointer; border:2px solid transparent; " +
-                     "user-select:none;";
+                     "cursor:pointer; border:2px solid transparent;";
 
         let closedTag = poll.is_closed
             ? " <span style='color:#e74c3c; font-size:0.8em;'>🔒 Closed</span>" : "";
 
+        // Title and audience on separate lines — no crowding on mobile
         card.innerHTML = `
-            <b>${poll.title}</b>${closedTag}
-            <span style="float:right; color:#888; font-size:0.85em;">
+            <div style="font-weight:bold; word-break:break-word;">
+                ${poll.title}${closedTag}
+            </div>
+            <div style="color:#888; font-size:0.82em; margin-top:3px;">
                 ${targetLabel[poll.target] || poll.target}
-                <span id="arrow_${role}_${poll.id}"> ▼</span>
-            </span>`;
+            </div>`;
 
-        // Inline options panel — appears directly below the card
         let optionsPanel = document.createElement("div");
-        optionsPanel.style = "display:none; background:white; border:2px solid #2c3e50; " +
-                             "border-top:none; border-radius:0 0 8px 8px; " +
-                             "padding:12px; margin-bottom:4px;";
+        optionsPanel.style = "display:none; background:white; " +
+                             "border:2px solid #2c3e50; border-top:none; " +
+                             "border-radius:0 0 8px 8px; padding:12px; margin-bottom:4px;";
         optionsPanel.dataset.open = "false";
 
-        // Build options inside the panel
-        let optionsHtml = "<p style='margin:0 0 8px 0;'><b>Which option means the right group?</b></p>";
+        let optionsHtml = "<p style='margin:0 0 10px 0; font-weight:bold;'>" +
+                          "Which option means the right group?</p>";
         poll.options.forEach(function(opt) {
             let voters = poll.voters[opt] || [];
             let count  = poll.counts[opt] || 0;
             optionsHtml += `
-                <div class="opt-card-${role}"
-                     data-opt="${opt}"
-                     data-poll="${poll.id}"
+                <div data-opt="${opt}" data-poll="${poll.id}"
                      style="padding:10px; border:2px solid #ddd; border-radius:6px;
-                            margin-bottom:6px; cursor:pointer;">
-                    <b>${opt}</b>
-                    <span style="float:right; color:#888; font-size:0.85em;">
+                            margin-bottom:8px; cursor:pointer;">
+                    <div style="font-weight:bold; word-break:break-word;">
+                        ${opt}
+                    </div>
+                    <div style="color:#888; font-size:0.85em; margin-top:3px;">
                         ${count} vote${count !== 1 ? "s" : ""}
-                    </span><br>
-                    <span style="font-size:0.85em; color:#555;">
-                        ${voters.length > 0 ? voters.join(", ") : "No votes yet"}
-                    </span>
+                        ${voters.length > 0 ? "· " + voters.join(", ") : "· No votes yet"}
+                    </div>
                 </div>`;
         });
         optionsPanel.innerHTML = optionsHtml;
 
-        // Click on option card
-        optionsPanel.querySelectorAll
         card.onclick = function() {
             let isOpen = optionsPanel.dataset.open === "true";
 
-            // Collapse all other panels in this list
             document.querySelectorAll(`#${containerId} [data-open='true']`)
                     .forEach(function(el) {
-                        el.style.display   = "none";
-                        el.dataset.open    = "false";
+                        el.style.display  = "none";
+                        el.dataset.open   = "false";
                     });
             document.querySelectorAll(`#${containerId} > div > div:first-child`)
                     .forEach(function(c) {
-                        c.style.border     = "2px solid transparent";
+                        c.style.border       = "2px solid transparent";
                         c.style.borderRadius = "8px";
                     });
 
@@ -234,25 +237,25 @@ function renderPollList(containerId, role) {
         wrapper.appendChild(optionsPanel);
         container.appendChild(wrapper);
 
-        // Attach click handlers to option cards after they're in the DOM
-        optionsPanel.querySelectorAll(`[data-opt]`).forEach(function(optCard) {
+        optionsPanel.querySelectorAll("[data-opt]").forEach(function(optCard) {
             optCard.onclick = function(e) {
                 e.stopPropagation();
                 let opt    = optCard.dataset.opt;
                 let voters = poll.voters[opt] || [];
 
-                // Highlight selected option
-                optionsPanel.querySelectorAll(`[data-opt]`).forEach(function(c) {
-                    c.style.border = "2px solid #ddd";
+                optionsPanel.querySelectorAll("[data-opt]").forEach(function(c) {
+                    c.style.border     = "2px solid #ddd";
                     c.style.background = "white";
                 });
-                optCard.style.border     = "2px solid " + (role === "driver" ? "#27ae60" : "#2980b9");
+                optCard.style.border     = "2px solid " +
+                    (role === "driver" ? "#27ae60" : "#2980b9");
                 optCard.style.background = role === "driver" ? "#eafaf1" : "#eaf4fb";
 
                 if (role === "driver") {
                     selectedDriverNames = voters;
                     if (voters.length > 0) {
-                        document.getElementById("driverPreviewNames").textContent = voters.join(", ");
+                        document.getElementById("driverPreviewNames").textContent =
+                            voters.join(", ");
                         document.getElementById("driverPreview").style.display = "block";
                     } else {
                         document.getElementById("driverPreview").style.display = "none";
@@ -260,7 +263,8 @@ function renderPollList(containerId, role) {
                 } else {
                     selectedPassengerNames = voters;
                     if (voters.length > 0) {
-                        document.getElementById("passengerPreviewNames").textContent = voters.join(", ");
+                        document.getElementById("passengerPreviewNames").textContent =
+                            voters.join(", ");
                         document.getElementById("passengerPreview").style.display = "block";
                     } else {
                         document.getElementById("passengerPreview").style.display = "none";
@@ -279,7 +283,8 @@ async function generateRoutes() {
     let churchAddress = document.getElementById("churchAddress").value.trim();
     let mode = document.querySelector("input[name='mode']:checked").value;
 
-    if (!churchAddress) { showError("Please enter the destination address."); return; }
+    if (!churchAddress) {
+        showError("Please enter the destination address."); return; }
     if (selectedDriverNames.length === 0) {
         showError("Please select a driver option from Step 1."); return; }
     if (selectedPassengerNames.length === 0) {
@@ -302,12 +307,10 @@ async function generateRoutes() {
             })
         });
         let data = await res.json();
-
         document.getElementById("loadingSection").style.display = "none";
         document.getElementById("generateBtn").disabled = false;
 
         if (data.error) { showError(data.error); return; }
-
         renderResults(data, mode);
     } catch(e) {
         document.getElementById("loadingSection").style.display = "none";
@@ -329,7 +332,7 @@ function renderResults(data, mode) {
             document.getElementById("morningRouteCards").innerHTML =
                 `<p style='color:red;'>${data.morning.error.join("<br>")}</p>`;
         } else {
-            renderRouteCards("morningRouteCards","morningUnassigned",
+            renderRouteCards("morningRouteCards", "morningUnassigned",
                              "morningTotals", data.morning, "pickup");
         }
     } else {
@@ -342,7 +345,7 @@ function renderResults(data, mode) {
             document.getElementById("returnRouteCards").innerHTML =
                 `<p style='color:red;'>${data.return.error.join("<br>")}</p>`;
         } else {
-            renderRouteCards("returnRouteCards","returnUnassigned",
+            renderRouteCards("returnRouteCards", "returnUnassigned",
                              "returnTotals", data.return, "dropoff");
         }
     } else {
@@ -365,10 +368,14 @@ function renderRouteCards(cardsId, unassignedId, totalsId, result, type) {
             ? "<p style='color:#aaa;'>No stops — driver goes directly.</p>"
             : route.stops.map(function(stop, j) {
                 let action = type === "pickup" ? "Pick up" : "Drop off";
-                return `<div style="padding:8px 0; border-bottom:1px solid #f0f0f0;">
+                return `<div style="padding:8px 0;
+                                    border-bottom:1px solid #f0f0f0;">
                     <span style="color:#888; font-size:0.85em;">Stop ${j+1}</span><br>
                     <b>${action}:</b> ${stop.passengers.join(", ")}<br>
-                    <span style="color:#555; font-size:0.9em;">📍 ${stop.address}</span>
+                    <span style="color:#555; font-size:0.9em;
+                                 word-break:break-word;">
+                        📍 ${stop.address}
+                    </span>
                 </div>`;
               }).join("");
 
@@ -405,11 +412,10 @@ function renderRouteCards(cardsId, unassignedId, totalsId, result, type) {
 // ------------------------------------------------
 function showError(msg) {
     let box = document.getElementById("errorBox");
-    box.textContent    = "❌ " + msg;
-    box.style.display  = "block";
+    box.textContent   = "❌ " + msg;
+    box.style.display = "block";
     box.scrollIntoView({ behavior: "smooth" });
 }
-
 function hideError() {
     document.getElementById("errorBox").style.display = "none";
 }
@@ -434,7 +440,7 @@ function setupAutocomplete(inputId, dropdownId) {
             .then(r => r.json())
             .then(function(results) {
                 dropdown.innerHTML = "";
-                if (results.length === 0) { dropdown.style.display = "none"; return; }
+                if (!results.length) { dropdown.style.display = "none"; return; }
                 results.forEach(function(place) {
                     let item = document.createElement("div");
                     item.textContent = place.display_name;

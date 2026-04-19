@@ -7,29 +7,55 @@
 {% if feedback_list %}
     {% for fb in feedback_list %}
     <div style="background:white; padding:15px; border-radius:10px;
-                margin-bottom:12px; border-left:4px solid #2c3e50;">
+                margin-bottom:12px; border-left:4px solid #2c3e50;"
+         id="fb_{{ fb.id }}">
 
-        <div style="display:flex; justify-content:space-between;
-                    align-items:flex-start; margin-bottom:6px;">
-            <div>
-                <b>{{ fb.name }}</b>
-                <span style="color:#888; font-size:0.85em; margin-left:10px;">
-                    {{ fb.created_at }} (Ontario)
-                </span>
-            </div>
-            <form method="POST" action="/admin/delete_feedback/{{ fb.id }}"
-                  onsubmit="return confirm('Delete this message from {{ fb.name }}?');"
-                  style="margin:0;">
-                <button type="submit"
-                        style="background:#e74c3c; color:white; border:none;
-                               padding:5px 12px; border-radius:5px;
-                               cursor:pointer; font-size:0.85em;">
-                    🗑️ Delete
+        <!-- Name on one line -->
+        <p style="margin:0 0 2px 0; font-weight:bold;">{{ fb.name }}</p>
+        <!-- Date on the next line, never wraps awkwardly -->
+        <p style="margin:0 0 10px 0; color:#888; font-size:0.82em;">
+            {{ fb.created_at }} (Ontario)
+        </p>
+
+        <p style="margin:0 0 12px 0; color:#333;">{{ fb.message }}</p>
+
+        <!-- Inline delete — no popup -->
+        <div id="deleteConfirm_{{ fb.id }}" style="display:none;
+             background:#fdecea; border:1px solid #e74c3c;
+             padding:10px; border-radius:6px; margin-bottom:8px;">
+            <p style="margin:0 0 8px 0; color:#c0392b; font-size:0.9em;">
+                Are you sure you want to delete this message?
+            </p>
+            <div style="display:flex; gap:8px;">
+                <form method="POST"
+                      action="/admin/delete_feedback/{{ fb.id }}"
+                      style="margin:0;">
+                    <button type="submit"
+                            style="background:#e74c3c; color:white; border:none;
+                                   padding:8px 16px; border-radius:5px;
+                                   cursor:pointer; font-size:0.9em;">
+                        Yes, delete
+                    </button>
+                </form>
+                <button type="button"
+                        onclick="cancelDelete({{ fb.id }})"
+                        style="background:#aaa; color:white; border:none;
+                               padding:8px 16px; border-radius:5px;
+                               cursor:pointer; font-size:0.9em;">
+                    Cancel
                 </button>
-            </form>
+            </div>
         </div>
 
-        <p style="margin:0; color:#333;">{{ fb.message }}</p>
+        <button type="button"
+                id="deleteBtn_{{ fb.id }}"
+                onclick="showDeleteConfirm({{ fb.id }})"
+                style="background:#e74c3c; color:white; border:none;
+                       padding:7px 14px; border-radius:5px;
+                       cursor:pointer; font-size:0.85em;">
+            🗑️ Delete
+        </button>
+
     </div>
     {% endfor %}
 {% else %}
@@ -37,5 +63,17 @@
         No feedback yet.
     </div>
 {% endif %}
+
+<script>
+function showDeleteConfirm(id) {
+    document.getElementById("deleteConfirm_" + id).style.display = "block";
+    document.getElementById("deleteBtn_" + id).style.display     = "none";
+}
+
+function cancelDelete(id) {
+    document.getElementById("deleteConfirm_" + id).style.display = "none";
+    document.getElementById("deleteBtn_" + id).style.display     = "inline-block";
+}
+</script>
 
 {% endblock %}

@@ -8,10 +8,56 @@
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
             font-family: Arial;
             background: #f4f6f8;
+        }
+
+        /* Prevent iOS zoom on input focus */
+        input, select, textarea {
+            font-size: 16px !important;
+        }
+
+        /* All inputs and selects full width and stacked */
+        input:not([type="checkbox"]):not([type="radio"]):not([type="number"]),
+        select,
+        textarea {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            margin-top: 4px;
+            font-family: Arial;
+        }
+
+        input[type="number"] {
+            display: block;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            margin-top: 4px;
+            font-family: Arial;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-top: 14px;
+            margin-bottom: 2px;
+            font-size: 0.9em;
+        }
+
+        button {
+            min-height: 44px;
+            cursor: pointer;
+            font-size: 1em;
+            font-family: Arial;
         }
 
         .topbar {
@@ -19,6 +65,8 @@
             color: white;
             padding: 15px;
             font-size: 18px;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         .sidebar {
@@ -33,6 +81,8 @@
             z-index: 1000;
             display: flex;
             flex-direction: column;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         .sidebar-top {
@@ -60,13 +110,20 @@
         .overlay {
             display: none;
             position: fixed;
-            width: 100%;
-            height: 100%;
+            width: 100%; height: 100%;
             background: rgba(0,0,0,0.4);
             top: 0; left: 0;
+            z-index: 999;
         }
 
         .content { padding: 20px; }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
 
         .badge {
             background: #e74c3c;
@@ -107,6 +164,13 @@
             margin-top: 3px;
             display: block;
         }
+
+        /* Mobile responsive tweaks */
+        @media (max-width: 600px) {
+            .content { padding: 12px; }
+            h2 { font-size: 1.3em; }
+            h3 { font-size: 1.1em; }
+        }
     </style>
 
     <script>
@@ -119,15 +183,14 @@
             document.getElementById("overlay").style.display = "none";
         }
 
-        // Register service worker
         if ("serviceWorker" in navigator) {
             window.addEventListener("load", function() {
                 navigator.serviceWorker.register("/sw.js", { scope: "/" })
                     .then(function(reg) {
-                        console.log("SW registered, scope:", reg.scope);
+                        console.log("SW registered:", reg.scope);
                     })
                     .catch(function(err) {
-                        console.log("SW registration failed:", err);
+                        console.log("SW failed:", err);
                     });
             });
         }
@@ -135,6 +198,35 @@
 </head>
 
 <body>
+
+<!-- Loading screen -->
+<div id="appLoader" style="
+    position:fixed; top:0; left:0;
+    width:100%; height:100%;
+    background:#2c3e50;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    z-index:99999;
+    transition:opacity 0.5s ease;">
+    <img src="/static/icons/icon-192.png"
+         style="width:80px; height:80px; border-radius:16px; margin-bottom:20px;"
+         onerror="this.style.display='none'">
+    <p style="color:white; font-size:1.2em; margin:0;">Church App</p>
+    <p style="color:rgba(255,255,255,0.6); font-size:0.85em;">Loading...</p>
+</div>
+<script>
+    window.addEventListener("load", function() {
+        setTimeout(function() {
+            var loader = document.getElementById("appLoader");
+            if (loader) {
+                loader.style.opacity = "0";
+                setTimeout(function() {
+                    loader.style.display = "none";
+                }, 500);
+            }
+        }, 300);
+    });
+</script>
 
 <div class="topbar">
     <span onclick="openSidebar()" style="cursor:pointer;">☰</span>
@@ -166,7 +258,7 @@
         {% if current_user.is_authenticated and current_user.role == "superuser" %}
             <a href="/admin/feedback">
                 📥 View Feedback
-                {% if unread_count and unread_count > 0 %}
+                {% if unread_count is defined and unread_count and unread_count > 0 %}
                     <span class="badge">{{ unread_count }}</span>
                 {% endif %}
             </a>

@@ -66,15 +66,24 @@ def user_eligible_for_poll(user, poll):
         return True
     return False
 
+
+def get_unread_count():
+    """Safe helper — returns unread feedback count for superuser, 0 for everyone else."""
+    try:
+        if current_user.is_authenticated and current_user.role == "superuser":
+            return Feedback.query.filter_by(is_read=False).count()
+    except:
+        pass
+    return 0
+
+
 # ----------------------
-# SERVICE WORKER
+# SERVICE WORKER + MANIFEST
 # ----------------------
 @app.route("/sw.js")
 def service_worker():
     response = make_response(
-        send_from_directory(
-            app.static_folder, "sw.js"
-        )
+        send_from_directory(app.static_folder, "sw.js")
     )
     response.headers["Content-Type"] = "application/javascript"
     response.headers["Service-Worker-Allowed"] = "/"
@@ -84,12 +93,19 @@ def service_worker():
 @app.route("/manifest.json")
 def manifest():
     response = make_response(
-        send_from_directory(
-            app.static_folder, "manifest.json"
-        )
+        send_from_directory(app.static_folder, "manifest.json")
     )
     response.headers["Content-Type"] = "application/manifest+json"
     return response
+
+
+# ----------------------
+# OFFLINE PAGE
+# ----------------------
+@app.route("/offline")
+def offline():
+    return render_template("offline.html")
+
 
 # ----------------------
 # HOME
@@ -167,14 +183,9 @@ def login():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    incomplete   = not profile_complete(current_user)
-    unread_count = 0
-    if current_user.role == "superuser":
-        unread_count = Feedback.query.filter_by(is_read=False).count()
-
     return render_template("dashboard.html",
-                           incomplete=incomplete,
-                           unread_count=unread_count)
+                           incomplete=not profile_complete(current_user),
+                           unread_count=get_unread_count())
 
 
 # ----------------------
@@ -189,7 +200,8 @@ def profile():
 
         if not address:
             return render_template("profile.html",
-                                   error_address="Please select a valid address from the dropdown")
+                                   error_address="Please select a valid address from the dropdown",
+                                   unread_count=get_unread_count())
 
         old_is_driver      = current_user.is_driver
         is_driver          = request.form.get("is_driver") == "on"
@@ -200,11 +212,13 @@ def profile():
                 cap = int(request.form.get("capacity", 0))
                 if cap < 1 or cap > 8:
                     return render_template("profile.html",
-                                           error_capacity="Capacity must be between 1 and 8")
+                                           error_capacity="Capacity must be between 1 and 8",
+                                           unread_count=get_unread_count())
                 current_user.capacity = cap
             except:
                 return render_template("profile.html",
-                                       error_capacity="Invalid capacity")
+                                       error_capacity="Invalid capacity",
+                                       unread_count=get_unread_count())
         else:
             current_user.capacity = 0
 
@@ -222,9 +236,11 @@ def profile():
                         db.session.delete(stale)
 
         db.session.commit()
-        return render_template("profile.html", success="✅ Changes Saved!")
+        return render_template("profile.html",
+                               success="✅ Changes Saved!",
+                               unread_count=get_unread_count())
 
-    return render_template("profile.html")
+    return render_template("profile.html", unread_count=get_unread_count())
 
 
 # ----------------------
@@ -234,7 +250,9 @@ def profile():
 @login_required
 def polls():
     if not profile_complete(current_user):
-        return render_template("polls.html", polls=[], profile_warning=True)
+        return render_template("polls.html", polls=[],
+                               profile_warning=True,
+                               unread_count=get_unread_count())
 
     if request.method == "POST":
         poll_id = request.form.get("poll_id")
@@ -304,7 +322,9 @@ def polls():
             "closes_at":     closes_at_str,
         })
 
-    return render_template("polls.html", polls=poll_data, profile_warning=False)
+    return render_template("polls.html", polls=poll_data,
+                           profile_warning=False,
+                           unread_count=get_unread_count())
 
 
 # ----------------------
@@ -333,7 +353,7 @@ def superuser_users():
                 f"/superuser/users?error_id={user_id}"
                 f"&error_msg={quote('Please select a valid address from the dropdown')}")
 
-        new_role  = "superuser" if user.id == current_user.id else request.form.get("role", "user")
+        new_role = "superuser" if user.id == current_user.id else request.form.get("role", "user")
         if new_role not in ("user", "admin", "superuser"):
             new_role = user.role
 
@@ -369,12 +389,16 @@ def superuser_users():
         user.role      = new_role
         user.is_driver = is_driver
         user.capacity  = capacity
+        user.first_name = request.form.get("first_name", user.first_name).strip() or user.first_name
+        user.last_name  = request.form.get("last_name",  user.last_name).strip()  or user.last_name
         db.session.commit()
 
         return redirect(f"/superuser/users?saved={user_id}")
 
     users = User.query.order_by(User.last_name).all()
-    return render_template("superuser_users.html", users=users)
+    return render_template("superuser_users.html",
+                           users=users,
+                           unread_count=get_unread_count())
 
 
 # ----------------------
@@ -423,7 +447,8 @@ def create_poll():
         if not options:
             return render_template("create_poll.html",
                                    error="Add at least 1 option",
-                                   all_polls=get_all_polls_json())
+                                   all_polls=get_all_polls_json(),
+                                   unread_count=get_unread_count())
 
         closes_at     = None
         closes_at_str = request.form.get("closes_at", "").strip()
@@ -434,12 +459,14 @@ def create_poll():
                 if local_dt < datetime.now(LOCAL_TZ):
                     return render_template("create_poll.html",
                                            error="Closing time cannot be in the past",
-                                           all_polls=get_all_polls_json())
+                                           all_polls=get_all_polls_json(),
+                                           unread_count=get_unread_count())
                 closes_at = local_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
             except ValueError:
                 return render_template("create_poll.html",
                                        error="Invalid date format",
-                                       all_polls=get_all_polls_json())
+                                       all_polls=get_all_polls_json(),
+                                       unread_count=get_unread_count())
 
         db.session.add(Poll(
             title=title, options="|||".join(options),
@@ -448,9 +475,12 @@ def create_poll():
 
         return render_template("create_poll.html",
                                success="Poll created!",
-                               all_polls=get_all_polls_json())
+                               all_polls=get_all_polls_json(),
+                               unread_count=get_unread_count())
 
-    return render_template("create_poll.html", all_polls=get_all_polls_json())
+    return render_template("create_poll.html",
+                           all_polls=get_all_polls_json(),
+                           unread_count=get_unread_count())
 
 
 # ----------------------
@@ -504,10 +534,11 @@ def edit_poll():
     if not poll:
         return render_template("create_poll.html",
                                error="Poll not found",
-                               all_polls=get_all_polls_json())
+                               all_polls=get_all_polls_json(),
+                               unread_count=get_unread_count())
 
-    new_title  = request.form.get("title", "").strip()
-    new_target = request.form.get("target")
+    new_title   = request.form.get("title", "").strip()
+    new_target  = request.form.get("target")
     new_options = []
     for i in range(20):
         opt = request.form.get(f"edit_option_{i}", "").strip()
@@ -517,7 +548,8 @@ def edit_poll():
     if not new_options:
         return render_template("create_poll.html",
                                error="Poll must have at least 1 option",
-                               all_polls=get_all_polls_json())
+                               all_polls=get_all_polls_json(),
+                               unread_count=get_unread_count())
 
     new_closes_at = None
     closes_at_str = request.form.get("closes_at", "").strip()
@@ -528,12 +560,14 @@ def edit_poll():
             if local_dt < datetime.now(LOCAL_TZ):
                 return render_template("create_poll.html",
                                        error="Closing time cannot be in the past",
-                                       all_polls=get_all_polls_json())
+                                       all_polls=get_all_polls_json(),
+                                       unread_count=get_unread_count())
             new_closes_at = local_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
         except ValueError:
             return render_template("create_poll.html",
                                    error="Invalid date format",
-                                   all_polls=get_all_polls_json())
+                                   all_polls=get_all_polls_json(),
+                                   unread_count=get_unread_count())
 
     old_options     = ([o for o in poll.options.split("|||") if o.strip()]
                        if poll.options else [])
@@ -552,7 +586,8 @@ def edit_poll():
 
     return render_template("create_poll.html",
                            edit_success="Poll updated successfully!",
-                           all_polls=get_all_polls_json())
+                           all_polls=get_all_polls_json(),
+                           unread_count=get_unread_count())
 
 
 # ----------------------
@@ -578,7 +613,8 @@ def delete_polls():
 
     return render_template("create_poll.html",
                            delete_success=msg,
-                           all_polls=get_all_polls_json())
+                           all_polls=get_all_polls_json(),
+                           unread_count=get_unread_count())
 
 
 # ----------------------
@@ -678,12 +714,15 @@ def feedback():
         message = request.form.get("message", "").strip()
         if not message:
             return render_template("feedback.html",
-                                   error="Please write something before submitting.")
+                                   error="Please write something before submitting.",
+                                   unread_count=get_unread_count())
         db.session.add(Feedback(user_id=current_user.id, message=message))
         db.session.commit()
-        return render_template("feedback.html", success="✅ Thanks for your feedback!")
+        return render_template("feedback.html",
+                               success="✅ Thanks for your feedback!",
+                               unread_count=get_unread_count())
 
-    return render_template("feedback.html")
+    return render_template("feedback.html", unread_count=get_unread_count())
 
 
 # ----------------------
@@ -711,7 +750,9 @@ def admin_feedback():
             "created_at": local_dt.strftime("%b %d, %Y at %I:%M %p")
         })
 
-    return render_template("admin_feedback.html", feedback_list=feedback_data)
+    return render_template("admin_feedback.html",
+                           feedback_list=feedback_data,
+                           unread_count=get_unread_count())
 
 
 # ----------------------
@@ -739,7 +780,7 @@ def delete_feedback(feedback_id):
 def routes():
     if current_user.role not in ("admin", "superuser"):
         return "Access Denied"
-    return render_template("routes.html")
+    return render_template("routes.html", unread_count=get_unread_count())
 
 
 # ----------------------

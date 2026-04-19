@@ -27,17 +27,24 @@
           onsubmit="return validateForm({{ u.id }})">
         <input type="hidden" name="user_id" value="{{ u.id }}">
 
-        <label style="font-weight:bold;">Role</label>
+        <!-- FIRST NAME -->
+        <label>First Name</label>
+        <input name="first_name" value="{{ u.first_name }}"
+               placeholder="First name" required>
+
+        <!-- LAST NAME -->
+        <label>Last Name</label>
+        <input name="last_name" value="{{ u.last_name }}"
+               placeholder="Last name" required>
+
+        <!-- ROLE -->
+        <label>Role</label>
         {% if u.id == current_user.id %}
-            <input value="Superuser (you)" disabled
-                   style="background:#ddd; width:100%; box-sizing:border-box;
-                          padding:8px; border:1px solid #ccc; border-radius:6px;">
+            <input value="Superuser (you)" disabled style="background:#ddd;">
             <input type="hidden" name="role" value="superuser">
             <small style="color:#e74c3c;">You cannot change your own role.</small>
         {% else %}
-            <select name="role"
-                    style="width:100%; box-sizing:border-box; padding:8px;
-                           border:1px solid #ccc; border-radius:6px;">
+            <select name="role">
                 <option value="user"
                     {% if u.role == "user" %}selected{% endif %}>User</option>
                 <option value="admin"
@@ -47,24 +54,18 @@
             </select>
         {% endif %}
 
-        <br><br>
-
-        <label style="font-weight:bold;">Phone Number</label>
+        <!-- PHONE -->
+        <label>Phone Number</label>
         <input name="phone" value="{{ u.phone or '' }}"
-               placeholder="e.g. 519-555-1234"
-               style="width:100%; box-sizing:border-box; padding:8px;
-                      border:1px solid #ccc; border-radius:6px;">
+               placeholder="e.g. 519-555-1234">
 
-        <br><br>
-
-        <label style="font-weight:bold;">Address</label>
+        <!-- ADDRESS -->
+        <label>Address</label>
         <div class="autocomplete-wrapper">
             <input name="address" id="address_{{ u.id }}"
                    value="{{ u.address or '' }}"
                    placeholder="Start typing address..."
-                   required autocomplete="off"
-                   style="width:100%; box-sizing:border-box; padding:8px;
-                          border:1px solid #ccc; border-radius:6px;">
+                   required autocomplete="off">
             <div class="autocomplete-list" id="dropdown_{{ u.id }}"
                  style="display:none;"></div>
         </div>
@@ -73,45 +74,77 @@
             Must select from dropdown. If not found, pick the closest street.
         </small>
 
-        <br><br>
-
-        <label style="font-weight:bold; display:flex; align-items:center; gap:8px;">
+        <!-- DRIVER -->
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
             <input type="checkbox" name="is_driver" id="driverCheck_{{ u.id }}"
                    {% if u.is_driver %}checked{% endif %}
-                   onchange="toggleCapacity({{ u.id }})">
+                   onchange="toggleCapacity({{ u.id }})"
+                   style="width:18px; height:18px; flex-shrink:0;">
             Is a driver
         </label>
         <p style="color:#888; font-size:0.85em; margin-top:4px;">
             ⚠️ Changing driver status removes votes on ineligible polls.
         </p>
 
+        <!-- CAPACITY -->
         <div id="capacityDiv_{{ u.id }}"
              style="display:{{ 'block' if u.is_driver else 'none' }};
                     margin-top:6px; margin-bottom:6px;">
-            <label style="font-weight:bold;">Capacity (1–8)</label>
+            <label>
+                Passenger Capacity
+                <span style="font-weight:normal; color:#888; font-size:0.85em;">
+                    — number of passengers you can carry (excluding yourself)
+                </span>
+            </label>
             <input type="number" name="capacity" id="capacityInput_{{ u.id }}"
                    min="1" max="8" value="{{ u.capacity or '' }}"
-                   style="width:100px; padding:8px; border:1px solid #ccc;
-                          border-radius:6px;">
+                   style="width:100px;">
             <span class="field-error" id="capacityError_{{ u.id }}"></span>
         </div>
 
         <br>
         <button type="submit"
-                style="background:#2c3e50; color:white; padding:10px 24px;
-                       border:none; border-radius:6px; cursor:pointer;">
+                style="background:#2c3e50; color:white; padding:12px;
+                       border:none; border-radius:6px; cursor:pointer;
+                       width:100%;">
             💾 Save Changes
         </button>
     </form>
 
     {% if u.id != current_user.id %}
     <form method="POST" action="/superuser/delete_user/{{ u.id }}"
-          onsubmit="return confirmDelete('{{ u.first_name }} {{ u.last_name }}');"
-          style="margin-top:12px;">
-        <button type="submit"
-                style="background:#e74c3c; color:white; padding:8px 20px;
+          style="margin-top:10px;"
+          id="deleteForm_{{ u.id }}">
+
+        <div id="deleteConfirm_{{ u.id }}"
+             style="display:none; background:#fdecea;
+                    border:1px solid #e74c3c; padding:10px;
+                    border-radius:6px; margin-bottom:8px;">
+            <p style="margin:0 0 8px 0; color:#c0392b; font-size:0.9em;">
+                Permanently delete <b>{{ u.first_name }} {{ u.last_name }}</b>?
+                All their votes and data will be removed.
+            </p>
+            <div style="display:flex; gap:8px;">
+                <button type="submit"
+                        style="background:#e74c3c; color:white; border:none;
+                               padding:8px 16px; border-radius:5px; cursor:pointer;">
+                    Yes, delete
+                </button>
+                <button type="button"
+                        onclick="cancelUserDelete({{ u.id }})"
+                        style="background:#aaa; color:white; border:none;
+                               padding:8px 16px; border-radius:5px; cursor:pointer;">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <button type="button"
+                id="deleteUserBtn_{{ u.id }}"
+                onclick="showUserDelete({{ u.id }})"
+                style="background:#e74c3c; color:white; padding:10px;
                        border:none; border-radius:6px; cursor:pointer;
-                       font-size:0.9em;">
+                       width:100%; font-size:0.9em;">
             🗑️ Delete Account
         </button>
     </form>
@@ -157,7 +190,8 @@ function setupAutocomplete(userId) {
                         dropdown.style.display   = "none";
                         addressConfirmed[userId] = true;
                         input.style.borderColor  = "";
-                        document.getElementById("addressError_" + userId).textContent = "";
+                        document.getElementById(
+                            "addressError_" + userId).textContent = "";
                     };
                     dropdown.appendChild(item);
                 });
@@ -179,8 +213,8 @@ function validateForm(userId) {
     if (!addressConfirmed[userId]) {
         let err = document.getElementById("addressError_" + userId);
         let inp = document.getElementById("address_" + userId);
-        err.textContent      = "Please select the address from the dropdown. " +
-                               "If not found, pick the closest street or option.";
+        err.textContent       = "Please select the address from the dropdown. " +
+                                "If not found, pick the closest street or option.";
         inp.style.borderColor = "#e74c3c";
         valid = false;
     }
@@ -203,11 +237,14 @@ function validateForm(userId) {
     return valid;
 }
 
-function confirmDelete(name) {
-    return confirm(
-        "Permanently delete the account for " + name + "?\n\n" +
-        "All their votes and data will be removed. This cannot be undone."
-    );
+function showUserDelete(userId) {
+    document.getElementById("deleteConfirm_" + userId).style.display = "block";
+    document.getElementById("deleteUserBtn_" + userId).style.display  = "none";
+}
+
+function cancelUserDelete(userId) {
+    document.getElementById("deleteConfirm_" + userId).style.display = "none";
+    document.getElementById("deleteUserBtn_" + userId).style.display  = "block";
 }
 
 function showMessages() {
@@ -228,7 +265,8 @@ function showMessages() {
         let div = document.getElementById("msg_" + savedId);
         if (div) {
             div.style.cssText = "display:block; background:#eafaf1; " +
-                "border:1px solid #27ae60; padding:10px; border-radius:6px; color:#27ae60;";
+                "border:1px solid #27ae60; padding:10px; " +
+                "border-radius:6px; color:#27ae60;";
             div.textContent = "✅ Changes saved!";
             document.getElementById("user_card_" + savedId)
                     ?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -239,7 +277,8 @@ function showMessages() {
         let div = document.getElementById("msg_" + errorId);
         if (div) {
             div.style.cssText = "display:block; background:#fdecea; " +
-                "border:1px solid #e74c3c; padding:10px; border-radius:6px; color:#c0392b;";
+                "border:1px solid #e74c3c; padding:10px; " +
+                "border-radius:6px; color:#c0392b;";
             div.textContent = decodeURIComponent(
                 params.get("error_msg") || "An error occurred.");
             document.getElementById("user_card_" + errorId)
