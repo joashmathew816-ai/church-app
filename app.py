@@ -21,9 +21,6 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'secret123')
 
 db.init_app(app)
 
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
@@ -40,17 +37,31 @@ def load_user(user_id):
 # HELPERS
 # ----------------------
 def get_all_polls_json():
-    now = datetime.utcnow()
-    return [
-        {
-            "id":        p.id,
-            "title":     p.title,
-            "target":    p.target,
-            "closes_at": p.closes_at.strftime("%Y-%m-%dT%H:%M") if p.closes_at else None,
-            "is_closed": p.closes_at is not None and p.closes_at < now
-        }
-        for p in Poll.query.all()
-    ]
+    try:
+        now    = datetime.utcnow()
+        polls  = Poll.query.all()
+        result = []
+        for p in polls:
+            try:
+                closes_at_str = None
+                is_closed     = False
+                if p.closes_at is not None:
+                    closes_at_str = p.closes_at.strftime("%Y-%m-%dT%H:%M")
+                    is_closed     = p.closes_at < now
+                result.append({
+                    "id":        p.id,
+                    "title":     p.title or "",
+                    "target":    p.target or "everyone",
+                    "closes_at": closes_at_str,
+                    "is_closed": is_closed
+                })
+            except Exception as e:
+                app.logger.error(f"Error processing poll {p.id}: {e}")
+                continue
+        return result
+    except Exception as e:
+        app.logger.error(f"get_all_polls_json error: {e}")
+        return []
 
 
 def profile_complete(user):
@@ -501,20 +512,31 @@ def create_poll():
                                        all_polls=get_all_polls_json(),
                                        unread_count=get_unread_count())
 
-        db.session.add(Poll(
-            title=title, options="|||".join(options),
-            target=target, closes_at=closes_at))
-        db.session.commit()
+        try:
+            db.session.add(Poll(
+                title=title, options="|||".join(options),
+                target=target, closes_at=closes_at))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Create poll DB error: {e}")
+            return render_template("create_poll.html",
+                                   error=f"Database error: {str(e)}",
+                                   all_polls=get_all_polls_json(),
+                                   unread_count=get_unread_count())
 
         return render_template("create_poll.html",
                                success="Poll created!",
                                all_polls=get_all_polls_json(),
                                unread_count=get_unread_count())
 
-    return render_template("create_poll.html",
-                           all_polls=get_all_polls_json(),
-                           unread_count=get_unread_count())
-
+    try:
+        return render_template("create_poll.html",
+                               all_polls=get_all_polls_json(),
+                               unread_count=get_unread_count())
+    except Exception as e:
+        app.logger.error(f"Create poll page error: {e}")
+        return f"Error loading page: {str(e)}", 500
 
 # ----------------------
 # ADMIN: GET POLL
