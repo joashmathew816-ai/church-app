@@ -54,6 +54,7 @@
     {% endif %}
 
     {% if item.user_eligible and not item.closed %}
+        <!-- OPEN POLL — user can vote -->
         <form method="POST">
             <input type="hidden" name="poll_id" value="{{ item.id }}">
 
@@ -74,15 +75,16 @@
                            padding:12px 24px; border-radius:6px; width:100%;">
                 {% if item.user_answer %}Update Vote{% else %}Submit Vote{% endif %}
             </button>
-
-            {% if item.user_answer %}
-                <p style="color:green; margin-top:8px;">
-                    ✅ You voted: <b>{{ item.user_answer }}</b>
-                </p>
-            {% endif %}
         </form>
 
+        {% if item.user_answer %}
+            <p style="color:green; margin-top:10px; font-size:0.95em;">
+                ✅ You voted: <b>{{ item.user_answer }}</b>
+            </p>
+        {% endif %}
+
     {% elif not item.closed %}
+        <!-- INELIGIBLE — show greyed options, no form -->
         {% for opt in item.options %}
             <div style="padding:8px 0; display:flex;
                         align-items:center; gap:10px; color:#aaa;">
@@ -93,17 +95,22 @@
         {% endfor %}
 
     {% else %}
+        <!-- CLOSED POLL — show options greyed, vote shown below in same format -->
         {% for opt in item.options %}
             <div style="padding:8px 0; display:flex;
                         align-items:center; gap:10px; color:#aaa;">
                 <input type="radio" disabled
                        style="width:18px; height:18px; flex-shrink:0;">
                 <span>{{ opt }}</span>
-                {% if item.user_answer == opt %}
-                    <span style="color:#aaa; font-size:0.85em;">✓ your vote</span>
-                {% endif %}
             </div>
         {% endfor %}
+
+        {% if item.user_answer %}
+            <p style="color:green; margin-top:10px; font-size:0.95em;">
+                ✅ You voted: <b>{{ item.user_answer }}</b>
+            </p>
+        {% endif %}
+
     {% endif %}
 
     {% if current_user.role in ["admin", "superuser"] %}
@@ -112,41 +119,35 @@
 
         {% for opt in item.options %}
         <div style="margin-bottom:12px;">
-
-            <!-- Option label on its own line -->
             <p style="margin:0 0 4px 0; font-size:0.95em; word-break:break-word;">
                 {{ opt }}
             </p>
-
-            <!-- Vote count on its own line, never wraps -->
-            <p style="margin:0 0 4px 0; color:#555; font-size:0.85em; white-space:nowrap;">
+            <p style="margin:0 0 4px 0; color:#555; font-size:0.85em;
+                      white-space:nowrap;">
                 {{ item.counts[opt] }} vote{{ 's' if item.counts[opt] != 1 else '' }}
             </p>
-
-            <!-- Progress bar -->
             {% if item.total > 0 %}
-            <div style="background:#f0f0f0; border-radius:4px; height:8px; width:100%;">
+            <div style="background:#f0f0f0; border-radius:4px;
+                        height:8px; width:100%;">
                 <div style="background:#2c3e50; border-radius:4px; height:8px;
                             width:{{ ((item.counts[opt] / item.total) * 100)|int }}%;
                             min-width:0;">
                 </div>
             </div>
             {% endif %}
-
-            <!-- Voter names -->
             {% if item.users[opt] %}
             <p style="color:#888; font-size:0.8em; margin:3px 0 0 0;
                       word-break:break-word;">
                 {{ item.users[opt]|join(", ") }}
             </p>
             {% endif %}
-
         </div>
         {% endfor %}
 
         <p style="color:#555; font-size:0.9em; margin-top:8px;
                   padding-top:8px; border-top:1px solid #f0f0f0;">
-            <b>Total:</b> {{ item.total }} vote{{ 's' if item.total != 1 else '' }}
+            <b>Total:</b> {{ item.total }}
+            vote{{ 's' if item.total != 1 else '' }}
             &nbsp;·&nbsp;
             <b>For:</b> {{ item.target }}
         </p>

@@ -7,6 +7,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from urllib.parse import quote
 import os
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
 
@@ -17,6 +20,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'secret123')
 
 db.init_app(app)
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -68,11 +74,10 @@ def user_eligible_for_poll(user, poll):
 
 
 def get_unread_count():
-    """Safe helper — returns unread feedback count for superuser, 0 for everyone else."""
     try:
         if current_user.is_authenticated and current_user.role == "superuser":
             return Feedback.query.filter_by(is_read=False).count()
-    except:
+    except Exception:
         pass
     return 0
 
@@ -99,9 +104,6 @@ def manifest():
     return response
 
 
-# ----------------------
-# OFFLINE PAGE
-# ----------------------
 @app.route("/offline")
 def offline():
     return render_template("offline.html")
@@ -215,7 +217,7 @@ def profile():
                                            error_capacity="Capacity must be between 1 and 8",
                                            unread_count=get_unread_count())
                 current_user.capacity = cap
-            except:
+            except Exception:
                 return render_template("profile.html",
                                        error_capacity="Invalid capacity",
                                        unread_count=get_unread_count())
@@ -259,72 +261,99 @@ def polls():
         answer  = request.form.get("answer")
 
         if poll_id and answer:
-            poll = Poll.query.get(int(poll_id))
-            if poll and not poll_is_closed(poll):
-                can_vote = (poll.target in ("everyone", "drivers")
-                            if current_user.is_driver
-                            else poll.target in ("everyone", "passengers"))
-                if can_vote:
-                    old = PollResponse.query.filter_by(
-                        user_id=current_user.id, poll_id=poll_id).first()
-                    if old:
-                        db.session.delete(old)
-                    db.session.add(PollResponse(
-                        user_id=current_user.id,
-                        poll_id=poll_id, answer=answer))
-                    db.session.commit()
+            try:
+                poll = Poll.query.get(int(poll_id))
+                if poll and not poll_is_closed(poll):
+                    can_vote = (poll.target in ("everyone", "drivers")
+                                if current_user.is_driver
+                                else poll.target in ("everyone", "passengers"))
+                    if can_vote:
+                        old = PollResponse.query.filter_by(
+                            user_id=current_user.id, poll_id=poll_id).first()
+                        if old:
+                            db.session.delete(old)
+                        db.session.add(PollResponse(
+                            user_id=current_user.id,
+                            poll_id=poll_id, answer=answer))
+                        db.session.commit()
+            except Exception as e:
+                logging.error(f"Poll vote error: {e}")
+                db.session.rollback()
 
-    poll_data = []
-    for poll in Poll.query.all():
-        if current_user.role not in ("admin", "superuser"):
-            if not (poll.target == "everyone"
-                    or (poll.target == "drivers"    and current_user.is_driver)
-                    or (poll.target == "passengers" and not current_user.is_driver)):
-                continue
+    try:
+        poll_data = []
+        for poll in Poll.query.all():
+            if current_user.role not in ("admin", "superuser"):
+                if not (poll.target == "everyone"
+                        or (poll.target == "drivers"    and current_user.is_driver)
+                        or (poll.target == "passengers" and not current_user.is_driver)):
+                    continue
 
-        user_eligible = (poll.target in ("everyone", "drivers")
-                         if current_user.is_driver
-                         else poll.target in ("everyone", "passengers"))
-        closed       = poll_is_closed(poll)
-        options_list = ([o for o in poll.options.split("|||") if o.strip()]
-                        if poll.options else [])
-        responses    = PollResponse.query.filter_by(poll_id=poll.id).all()
+            user_eligible = (poll.target in ("everyone", "drivers")
+                             if current_user.is_driver
+                             else poll.target in ("everyone", "passengers"))
+            closed       = poll_is_closed(poll)
 
-        counts = {opt: 0 for opt in options_list}
-        users  = {opt: [] for opt in options_list}
-        for r in responses:
-            if r.answer in counts:
-                counts[r.answer] += 1
-                u = User.query.get(r.user_id)
-                if u:
-                    users[r.answer].append(u.first_name)
+            # Safely parse options
+            if poll.options:
+                options_list = [o.strip() for o in poll.options.split("|||")
+                                if o.strip()]
+            else:
+                options_list = []
 
-        existing = PollResponse.query.filter_by(
-            user_id=current_user.id, poll_id=poll.id).first()
+            responses = PollResponse.query.filter_by(poll_id=poll.id).all()
 
-        closes_at_str = None
-        if poll.closes_at:
-            local_dt = poll.closes_at.replace(
-                tzinfo=ZoneInfo("UTC")).astimezone(LOCAL_TZ)
-            closes_at_str = local_dt.strftime("%b %d, %Y at %I:%M %p")
+            counts = {opt: 0 for opt in options_list}
+            users  = {opt: [] for opt in options_list}
+            for r in responses:
+                # Only count responses that match current options
+                if r.answer in counts:
+                    counts[r.answer] += 1
+                    u = User.query.get(r.user_id)
+                    if u:
+                        users[r.answer].append(u.first_name)
 
-        poll_data.append({
-            "id":            poll.id,
-            "title":         poll.title,
-            "target":        poll.target,
-            "options":       options_list,
-            "counts":        counts,
-            "users":         users,
-            "total":         len(responses),
-            "user_eligible": user_eligible,
-            "user_answer":   existing.answer if existing else None,
-            "closed":        closed,
-            "closes_at":     closes_at_str,
-        })
+            existing = PollResponse.query.filter_by(
+                user_id=current_user.id, poll_id=poll.id).first()
 
-    return render_template("polls.html", polls=poll_data,
-                           profile_warning=False,
-                           unread_count=get_unread_count())
+            # Only show user_answer if it matches a current option
+            user_answer = None
+            if existing and existing.answer in options_list:
+                user_answer = existing.answer
+
+            closes_at_str = None
+            if poll.closes_at:
+                try:
+                    local_dt = poll.closes_at.replace(
+                        tzinfo=ZoneInfo("UTC")).astimezone(LOCAL_TZ)
+                    closes_at_str = local_dt.strftime("%b %d, %Y at %I:%M %p")
+                except Exception:
+                    closes_at_str = None
+
+            poll_data.append({
+                "id":            poll.id,
+                "title":         poll.title,
+                "target":        poll.target,
+                "options":       options_list,
+                "counts":        counts,
+                "users":         users,
+                "total":         len(responses),
+                "user_eligible": user_eligible,
+                "user_answer":   user_answer,
+                "closed":        closed,
+                "closes_at":     closes_at_str,
+            })
+
+        return render_template("polls.html", polls=poll_data,
+                               profile_warning=False,
+                               unread_count=get_unread_count())
+
+    except Exception as e:
+        logging.error(f"Polls page error: {e}")
+        return render_template("polls.html", polls=[],
+                               profile_warning=False,
+                               unread_count=get_unread_count(),
+                               error="Something went wrong loading polls. Please try again.")
 
 
 # ----------------------
@@ -345,7 +374,8 @@ def superuser_users():
         user    = User.query.get(user_id)
 
         if not user:
-            return redirect(f"/superuser/users?error_id=0&error_msg={quote('User not found')}")
+            return redirect(
+                f"/superuser/users?error_id=0&error_msg={quote('User not found')}")
 
         address = request.form.get("address", "").strip()
         if not address:
@@ -353,7 +383,8 @@ def superuser_users():
                 f"/superuser/users?error_id={user_id}"
                 f"&error_msg={quote('Please select a valid address from the dropdown')}")
 
-        new_role = "superuser" if user.id == current_user.id else request.form.get("role", "user")
+        new_role = ("superuser" if user.id == current_user.id
+                    else request.form.get("role", "user"))
         if new_role not in ("user", "admin", "superuser"):
             new_role = user.role
 
@@ -368,7 +399,7 @@ def superuser_users():
                         f"/superuser/users?error_id={user_id}"
                         f"&error_msg={quote('Capacity must be between 1 and 8')}")
                 capacity = cap
-            except:
+            except Exception:
                 return redirect(
                     f"/superuser/users?error_id={user_id}"
                     f"&error_msg={quote('Invalid capacity value')}")
@@ -384,13 +415,15 @@ def superuser_users():
                     if stale:
                         db.session.delete(stale)
 
-        user.address   = address
-        user.phone     = request.form.get("phone", "").strip()
-        user.role      = new_role
-        user.is_driver = is_driver
-        user.capacity  = capacity
-        user.first_name = request.form.get("first_name", user.first_name).strip() or user.first_name
-        user.last_name  = request.form.get("last_name",  user.last_name).strip()  or user.last_name
+        user.first_name = (request.form.get("first_name", "").strip()
+                           or user.first_name)
+        user.last_name  = (request.form.get("last_name", "").strip()
+                           or user.last_name)
+        user.address    = address
+        user.phone      = request.form.get("phone", "").strip()
+        user.role       = new_role
+        user.is_driver  = is_driver
+        user.capacity   = capacity
         db.session.commit()
 
         return redirect(f"/superuser/users?saved={user_id}")
@@ -496,7 +529,7 @@ def get_poll(poll_id):
     if not poll:
         return jsonify({"error": "Poll not found"}), 404
 
-    options_list = ([o for o in poll.options.split("|||") if o.strip()]
+    options_list = ([o.strip() for o in poll.options.split("|||") if o.strip()]
                     if poll.options else [])
     counts = {opt: 0 for opt in options_list}
     voters = {opt: [] for opt in options_list}
@@ -510,8 +543,11 @@ def get_poll(poll_id):
 
     closes_str = ""
     if poll.closes_at:
-        closes_str = poll.closes_at.replace(
-            tzinfo=ZoneInfo("UTC")).astimezone(LOCAL_TZ).strftime("%Y-%m-%dT%H:%M")
+        try:
+            closes_str = poll.closes_at.replace(
+                tzinfo=ZoneInfo("UTC")).astimezone(LOCAL_TZ).strftime("%Y-%m-%dT%H:%M")
+        except Exception:
+            closes_str = ""
 
     return jsonify({
         "id": poll.id, "title": poll.title, "target": poll.target,
@@ -569,7 +605,7 @@ def edit_poll():
                                    all_polls=get_all_polls_json(),
                                    unread_count=get_unread_count())
 
-    old_options     = ([o for o in poll.options.split("|||") if o.strip()]
+    old_options     = ([o.strip() for o in poll.options.split("|||") if o.strip()]
                        if poll.options else [])
     removed_options = [o for o in old_options if o not in new_options]
 
@@ -626,27 +662,31 @@ def polls_for_routes():
     if current_user.role not in ("admin", "superuser"):
         return jsonify({"error": "Access Denied"}), 403
 
-    result = []
-    for poll in Poll.query.all():
-        options_list = ([o for o in poll.options.split("|||") if o.strip()]
-                        if poll.options else [])
-        counts = {opt: 0 for opt in options_list}
-        voters = {opt: [] for opt in options_list}
+    try:
+        result = []
+        for poll in Poll.query.all():
+            options_list = ([o.strip() for o in poll.options.split("|||") if o.strip()]
+                            if poll.options else [])
+            counts = {opt: 0 for opt in options_list}
+            voters = {opt: [] for opt in options_list}
 
-        for r in PollResponse.query.filter_by(poll_id=poll.id).all():
-            if r.answer in counts:
-                counts[r.answer] += 1
-                u = User.query.get(r.user_id)
-                if u:
-                    voters[r.answer].append(u.first_name)
+            for r in PollResponse.query.filter_by(poll_id=poll.id).all():
+                if r.answer in counts:
+                    counts[r.answer] += 1
+                    u = User.query.get(r.user_id)
+                    if u:
+                        voters[r.answer].append(u.first_name)
 
-        result.append({
-            "id": poll.id, "title": poll.title, "target": poll.target,
-            "options": options_list, "counts": counts, "voters": voters,
-            "is_closed": poll_is_closed(poll)
-        })
+            result.append({
+                "id": poll.id, "title": poll.title, "target": poll.target,
+                "options": options_list, "counts": counts, "voters": voters,
+                "is_closed": poll_is_closed(poll)
+            })
 
-    return jsonify(result)
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"polls_for_routes error: {e}")
+        return jsonify([])
 
 
 # ----------------------
@@ -740,14 +780,19 @@ def admin_feedback():
 
     feedback_data = []
     for fb in Feedback.query.order_by(Feedback.created_at.desc()).all():
-        u        = User.query.get(fb.user_id)
-        local_dt = fb.created_at.replace(
-            tzinfo=ZoneInfo("UTC")).astimezone(LOCAL_TZ)
+        u = User.query.get(fb.user_id)
+        try:
+            local_dt = fb.created_at.replace(
+                tzinfo=ZoneInfo("UTC")).astimezone(LOCAL_TZ)
+            created_str = local_dt.strftime("%b %d, %Y at %I:%M %p")
+        except Exception:
+            created_str = "Unknown time"
+
         feedback_data.append({
             "id":         fb.id,
             "name":       (u.first_name + " " + u.last_name) if u else "Unknown",
             "message":    fb.message,
-            "created_at": local_dt.strftime("%b %d, %Y at %I:%M %p")
+            "created_at": created_str
         })
 
     return render_template("admin_feedback.html",
@@ -822,6 +867,7 @@ def setup():
                 "Admin: Admin / admin123<br>"
                 "Superuser: Super / super123")
     except Exception as e:
+        logging.error(f"Setup error: {e}")
         return f"❌ Error: {str(e)}"
 
 
