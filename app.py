@@ -3,13 +3,10 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Poll, PollResponse, Feedback
 from optimizer import optimize_morning, optimize_return
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from urllib.parse import quote
 import os
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
 
@@ -30,15 +27,26 @@ LOCAL_TZ = ZoneInfo("America/Toronto")
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    # Fixed: use Session.get() instead of legacy Query.get()
+    return db.session.get(User, int(user_id))
 
 
 # ----------------------
 # HELPERS
 # ----------------------
+def now_utc():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
+
+def now_utc_naive():
+    """Return current UTC time as naive datetime for DB storage."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def get_all_polls_json():
     try:
-        now    = datetime.utcnow()
+        now    = now_utc_naive()
         polls  = Poll.query.all()
         result = []
         for p in polls:
@@ -71,7 +79,7 @@ def profile_complete(user):
 def poll_is_closed(poll):
     if poll.closes_at is None:
         return False
-    return poll.closes_at < datetime.utcnow()
+    return poll.closes_at < now_utc_naive()
 
 
 def user_eligible_for_poll(user, poll):
@@ -273,7 +281,7 @@ def polls():
 
         if poll_id and answer:
             try:
-                poll = Poll.query.get(int(poll_id))
+                poll = db.session.get(Poll, int(poll_id))
                 if poll and not poll_is_closed(poll):
                     can_vote = (poll.target in ("everyone", "drivers")
                                 if current_user.is_driver
@@ -288,7 +296,7 @@ def polls():
                             poll_id=poll_id, answer=answer))
                         db.session.commit()
             except Exception as e:
-                logging.error(f"Poll vote error: {e}")
+                app.logger.error(f"Poll vote error: {e}")
                 db.session.rollback()
 
     try:
@@ -305,7 +313,6 @@ def polls():
                              else poll.target in ("everyone", "passengers"))
             closed       = poll_is_closed(poll)
 
-            # Safely parse options
             if poll.options:
                 options_list = [o.strip() for o in poll.options.split("|||")
                                 if o.strip()]
@@ -317,17 +324,15 @@ def polls():
             counts = {opt: 0 for opt in options_list}
             users  = {opt: [] for opt in options_list}
             for r in responses:
-                # Only count responses that match current options
                 if r.answer in counts:
                     counts[r.answer] += 1
-                    u = User.query.get(r.user_id)
+                    u = db.session.get(User, r.user_id)
                     if u:
                         users[r.answer].append(u.first_name)
 
             existing = PollResponse.query.filter_by(
                 user_id=current_user.id, poll_id=poll.id).first()
 
-            # Only show user_answer if it matches a current option
             user_answer = None
             if existing and existing.answer in options_list:
                 user_answer = existing.answer
@@ -336,7 +341,7 @@ def polls():
             if poll.closes_at:
                 try:
                     local_dt = poll.closes_at.replace(
-                        tzinfo=ZoneInfo("UTC")).astimezone(LOCAL_TZ)
+                        tzinfo=timezone.utc).astimezone(LOCAL_TZ)
                     closes_at_str = local_dt.strftime("%b %d, %Y at %I:%M %p")
                 except Exception:
                     closes_at_str = None
@@ -360,11 +365,10 @@ def polls():
                                unread_count=get_unread_count())
 
     except Exception as e:
-        logging.error(f"Polls page error: {e}")
+        app.logger.error(f"Polls page error: {e}")
         return render_template("polls.html", polls=[],
                                profile_warning=False,
-                               unread_count=get_unread_count(),
-                               error="Something went wrong loading polls. Please try again.")
+                               unread_count=get_unread_count())
 
 
 # ----------------------
@@ -382,7 +386,7 @@ def superuser_users():
             return redirect("/superuser/users")
 
         user_id = int(user_id)
-        user    = User.query.get(user_id)
+        user    = db.session.get(User, user_id)
 
         if not user:
             return redirect(
@@ -459,7 +463,7 @@ def delete_user(user_id):
             f"/superuser/users?error_id={user_id}"
             f"&error_msg={quote('You cannot delete your own account')}")
 
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if user:
         PollResponse.query.filter_by(user_id=user_id).delete()
         Feedback.query.filter_by(user_id=user_id).delete()
@@ -505,7 +509,8 @@ def create_poll():
                                            error="Closing time cannot be in the past",
                                            all_polls=get_all_polls_json(),
                                            unread_count=get_unread_count())
-                closes_at = local_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+                closes_at = local_dt.astimezone(
+                    timezone.utc).replace(tzinfo=None)
             except ValueError:
                 return render_template("create_poll.html",
                                        error="Invalid date format",
@@ -514,14 +519,17 @@ def create_poll():
 
         try:
             db.session.add(Poll(
-                title=title, options="|||".join(options),
-                target=target, closes_at=closes_at))
+                title=title,
+                options="|||".join(options),
+                target=target,
+                closes_at=closes_at
+            ))
             db.session.commit()
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Create poll DB error: {e}")
             return render_template("create_poll.html",
-                                   error=f"Database error: {str(e)}",
+                                   error=f"Could not save poll: {str(e)}",
                                    all_polls=get_all_polls_json(),
                                    unread_count=get_unread_count())
 
@@ -530,13 +538,10 @@ def create_poll():
                                all_polls=get_all_polls_json(),
                                unread_count=get_unread_count())
 
-    try:
-        return render_template("create_poll.html",
-                               all_polls=get_all_polls_json(),
-                               unread_count=get_unread_count())
-    except Exception as e:
-        app.logger.error(f"Create poll page error: {e}")
-        return f"Error loading page: {str(e)}", 500
+    return render_template("create_poll.html",
+                           all_polls=get_all_polls_json(),
+                           unread_count=get_unread_count())
+
 
 # ----------------------
 # ADMIN: GET POLL
@@ -547,7 +552,7 @@ def get_poll(poll_id):
     if current_user.role not in ("admin", "superuser"):
         return jsonify({"error": "Access Denied"}), 403
 
-    poll = Poll.query.get(poll_id)
+    poll = db.session.get(Poll, poll_id)
     if not poll:
         return jsonify({"error": "Poll not found"}), 404
 
@@ -559,7 +564,7 @@ def get_poll(poll_id):
     for r in PollResponse.query.filter_by(poll_id=poll_id).all():
         if r.answer in counts:
             counts[r.answer] += 1
-            u = User.query.get(r.user_id)
+            u = db.session.get(User, r.user_id)
             if u:
                 voters[r.answer].append(u.first_name)
 
@@ -567,7 +572,8 @@ def get_poll(poll_id):
     if poll.closes_at:
         try:
             closes_str = poll.closes_at.replace(
-                tzinfo=ZoneInfo("UTC")).astimezone(LOCAL_TZ).strftime("%Y-%m-%dT%H:%M")
+                tzinfo=timezone.utc).astimezone(
+                LOCAL_TZ).strftime("%Y-%m-%dT%H:%M")
         except Exception:
             closes_str = ""
 
@@ -588,7 +594,7 @@ def edit_poll():
         return "Access Denied"
 
     poll_id = request.form.get("poll_id")
-    poll    = Poll.query.get(int(poll_id))
+    poll    = db.session.get(Poll, int(poll_id))
     if not poll:
         return render_template("create_poll.html",
                                error="Poll not found",
@@ -620,7 +626,8 @@ def edit_poll():
                                        error="Closing time cannot be in the past",
                                        all_polls=get_all_polls_json(),
                                        unread_count=get_unread_count())
-            new_closes_at = local_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+            new_closes_at = local_dt.astimezone(
+                timezone.utc).replace(tzinfo=None)
         except ValueError:
             return render_template("create_poll.html",
                                    error="Invalid date format",
@@ -659,7 +666,7 @@ def delete_polls():
 
     ids_to_delete = request.form.getlist("delete_ids")
     for poll_id in ids_to_delete:
-        poll = Poll.query.get(int(poll_id))
+        poll = db.session.get(Poll, int(poll_id))
         if poll:
             PollResponse.query.filter_by(poll_id=poll.id).delete()
             db.session.delete(poll)
@@ -695,7 +702,7 @@ def polls_for_routes():
             for r in PollResponse.query.filter_by(poll_id=poll.id).all():
                 if r.answer in counts:
                     counts[r.answer] += 1
-                    u = User.query.get(r.user_id)
+                    u = db.session.get(User, r.user_id)
                     if u:
                         voters[r.answer].append(u.first_name)
 
@@ -707,7 +714,7 @@ def polls_for_routes():
 
         return jsonify(result)
     except Exception as e:
-        logging.error(f"polls_for_routes error: {e}")
+        app.logger.error(f"polls_for_routes error: {e}")
         return jsonify([])
 
 
@@ -802,10 +809,10 @@ def admin_feedback():
 
     feedback_data = []
     for fb in Feedback.query.order_by(Feedback.created_at.desc()).all():
-        u = User.query.get(fb.user_id)
+        u = db.session.get(User, fb.user_id)
         try:
             local_dt = fb.created_at.replace(
-                tzinfo=ZoneInfo("UTC")).astimezone(LOCAL_TZ)
+                tzinfo=timezone.utc).astimezone(LOCAL_TZ)
             created_str = local_dt.strftime("%b %d, %Y at %I:%M %p")
         except Exception:
             created_str = "Unknown time"
@@ -831,7 +838,7 @@ def delete_feedback(feedback_id):
     if current_user.role != "superuser":
         return "Access Denied", 403
 
-    fb = Feedback.query.get(feedback_id)
+    fb = db.session.get(Feedback, feedback_id)
     if fb:
         db.session.delete(fb)
         db.session.commit()
@@ -858,6 +865,30 @@ def routes():
 def logout():
     logout_user()
     return redirect("/login")
+
+
+# ----------------------
+# MIGRATE — run once to add missing columns
+# ----------------------
+@app.route("/migrate")
+def migrate():
+    try:
+        with db.engine.connect() as conn:
+            try:
+                conn.execute(db.text(
+                    "ALTER TABLE poll ADD COLUMN closes_at TIMESTAMP NULL"
+                ))
+                conn.commit()
+                result = "✅ Migration successful — closes_at column added."
+            except Exception as e:
+                err = str(e).lower()
+                if "already exists" in err or "duplicate" in err:
+                    result = "✅ Column already exists — no migration needed."
+                else:
+                    result = f"❌ Migration error: {str(e)}"
+        return result
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
 
 # ----------------------
@@ -889,7 +920,6 @@ def setup():
                 "Admin: Admin / admin123<br>"
                 "Superuser: Super / super123")
     except Exception as e:
-        logging.error(f"Setup error: {e}")
         return f"❌ Error: {str(e)}"
 
 
