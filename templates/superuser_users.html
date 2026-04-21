@@ -105,29 +105,28 @@
             <span class="field-error" id="capacityError_{{ u.id }}"></span>
         </div>
 
-        <!-- PASSWORD RESET -->
-        <div style="margin-top:16px; padding:12px; border-radius:8px;
-                    background:{{ '#fff3cd' if u.id in reset_user_ids else '#f8f9fa' }};
-                    border:1px solid {{ '#ffc107' if u.id in reset_user_ids else '#eee' }};">
-            {% if u.id in reset_user_ids %}
-                <p style="margin:0 0 8px 0; color:#856404;
-                          font-weight:bold; font-size:0.9em;">
-                    🔑 This user has requested a password reset
-                </p>
-            {% endif %}
+            <!-- PASSWORD RESET — only shown when user has requested it -->
+        {% if u.id in reset_user_ids %}
+        <div style="margin-top:16px; padding:14px; border-radius:8px;
+                    background:#fff3cd; border:1px solid #ffc107;">
+            <p style="margin:0 0 10px 0; color:#856404; font-weight:bold; font-size:0.9em;">
+                🔑 This user has requested a password reset
+            </p>
             <label>
-                Set New Password
-                <span style="font-weight:normal; color:#888; font-size:0.85em;">
-                    — leave blank to keep current password
+                Set Temporary Password
+                <span style="font-weight:normal; color:#856404; font-size:0.85em;">
+                    — required to handle this request
                 </span>
             </label>
             <input type="password" name="new_password"
-                   placeholder="Type new temporary password..."
-                   autocomplete="new-password">
+                placeholder="Type a temporary password for this user..."
+                autocomplete="new-password">
             <small style="color:#888; display:block; margin-top:4px;">
-                The user will be notified via push notification.
+                The user will be notified via push notification with their new password.
+                Make it something simple they can change after logging in.
             </small>
         </div>
+        {% endif %}
 
         <br>
         <button type="submit"

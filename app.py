@@ -88,12 +88,24 @@ def user_eligible_for_poll(user, poll):
 
 
 def get_unread_count():
+    """
+    Returns count of unread feedback PLUS pending password reset requests.
+    This now shows on the Manage Users badge, not View Feedback.
+    """
     try:
         if current_user.is_authenticated and current_user.role == "superuser":
-            count = Feedback.query.filter_by(is_read=False).count()
-            resets = PasswordResetRequest.query.filter_by(
+            reset_count = PasswordResetRequest.query.filter_by(
                 is_handled=False).count()
-            return count + resets
+            return reset_count
+    except Exception:
+        pass
+    return 0
+
+def get_feedback_unread_count():
+    """Separate count just for unread feedback messages."""
+    try:
+        if current_user.is_authenticated and current_user.role == "superuser":
+            return Feedback.query.filter_by(is_read=False).count()
     except Exception:
         pass
     return 0
@@ -383,8 +395,8 @@ def forgot_password():
 def dashboard():
     return render_template("dashboard.html",
                            incomplete=not profile_complete(current_user),
-                           unread_count=get_unread_count())
-
+                           unread_count=get_unread_count(),
+                           feedback_unread=get_feedback_unread_count())
 
 # ----------------------
 # PROFILE
@@ -446,9 +458,9 @@ def profile():
 @app.route("/change_password", methods=["POST"])
 @login_required
 def change_password():
-    current_pw  = request.form.get("current_password", "")
-    new_pw      = request.form.get("new_password", "").strip()
-    confirm_pw  = request.form.get("confirm_password", "").strip()
+    current_pw = request.form.get("current_password", "")
+    new_pw     = request.form.get("new_password", "").strip()
+    confirm_pw = request.form.get("confirm_password", "").strip()
 
     if not check_password_hash(current_user.password, current_pw):
         return render_template("profile.html",
@@ -471,7 +483,6 @@ def change_password():
     return render_template("profile.html",
                            password_success="✅ Password updated successfully!",
                            unread_count=get_unread_count())
-
 # ----------------------
 # SAVE PUSH TOKEN
 # ----------------------
@@ -692,7 +703,7 @@ def superuser_users():
 
         return redirect(f"/superuser/users?saved={user_id}")
 
-    users         = User.query.order_by(User.last_name).all()
+    users          = User.query.order_by(User.last_name).all()
     reset_requests = PasswordResetRequest.query.filter_by(
         is_handled=False).all()
     reset_user_ids = {r.user_id for r in reset_requests}
@@ -1070,7 +1081,7 @@ def admin_feedback():
     for fb in Feedback.query.order_by(Feedback.created_at.desc()).all():
         u = db.session.get(User, fb.user_id)
         try:
-            local_dt = fb.created_at.replace(
+            local_dt    = fb.created_at.replace(
                 tzinfo=timezone.utc).astimezone(LOCAL_TZ)
             created_str = local_dt.strftime("%b %d, %Y at %I:%M %p")
         except Exception:
@@ -1085,8 +1096,8 @@ def admin_feedback():
 
     return render_template("admin_feedback.html",
                            feedback_list=feedback_data,
-                           unread_count=get_unread_count())
-
+                           unread_count=get_unread_count(),
+                           feedback_unread=get_feedback_unread_count())
 
 # ----------------------
 # SUPERUSER: DELETE FEEDBACK
@@ -1203,9 +1214,37 @@ def test_notification():
             "✅ Test Notification",
             "If you see this, notifications are working!"
         )
-        return "Notification sent! Check your device."
+        return ("Notification sent! Check your phone.<br>"
+                "If nothing appears, visit /debug_firebase for details.")
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error sending notification: {str(e)}"
+
+
+@app.route("/debug_firebase")
+@login_required
+def debug_firebase():
+    if current_user.role != "superuser":
+        return "Access denied", 403
+    try:
+        pk      = os.environ.get("FIREBASE_PRIVATE_KEY", "NOT SET")
+        project = os.environ.get("FIREBASE_PROJECT_ID", "NOT SET")
+        email   = os.environ.get("FIREBASE_CLIENT_EMAIL", "NOT SET")
+        tokens  = PushToken.query.count()
+        your_token = PushToken.query.filter_by(
+            user_id=current_user.id).first()
+
+        lines = [
+            f"<b>Project ID:</b> {project}",
+            f"<b>Client Email:</b> {email}",
+            f"<b>Key set:</b> {'YES' if pk != 'NOT SET' else 'NO'}",
+            f"<b>Key starts with:</b> {pk[:40] if pk != 'NOT SET' else 'N/A'}",
+            f"<b>Key has newlines:</b> {'YES' if chr(10) in pk or '\\n' in pk else 'NO — THIS IS THE PROBLEM'}",
+            f"<b>Total tokens in DB:</b> {tokens}",
+            f"<b>Your token saved:</b> {'YES — ' + your_token.token[:30] + '...' if your_token else 'NO — notifications will not work until you allow them in browser'}",
+        ]
+        return "<br>".join(lines)
+    except Exception as e:
+        return f"Debug error: {str(e)}"
 
 @app.cli.command("create-db")
 def create_db():

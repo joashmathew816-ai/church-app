@@ -48,6 +48,7 @@ class Feedback(db.Model):
 
 class PushToken(db.Model):
     id      = db.Column(db.Integer, primary_key=True)
+    # unique=True here is fine — one token per user
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)
     token   = db.Column(db.Text)
     updated = db.Column(db.DateTime, default=datetime.utcnow)
@@ -55,6 +56,7 @@ class PushToken(db.Model):
 
 class PasswordResetRequest(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
-    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'))
+    # Removed unique=True — users can request multiple times
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_handled = db.Column(db.Boolean, default=False)
