@@ -1,48 +1,110 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Login</title>
+    <title>Login — Church App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <style>
         body {
             font-family: Arial;
-            text-align: center;
-            margin-top: 100px;
+            background: #f4f6f8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
         }
-
+        .card {
+            background: white;
+            max-width: 380px;
+            width: 100%;
+            padding: 30px;
+            border-radius: 12px;
+        }
+        h2 { margin-top:0; color:#2c3e50; text-align:center; }
         input {
-            padding: 10px;
-            width: 80%;
-            margin: 10px;
+            padding: 12px;
+            width: 100%;
+            box-sizing: border-box;
+            margin: 6px 0 12px 0;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 16px;
         }
-
+        label {
+            display: block;
+            font-weight: bold;
+            font-size: 0.9em;
+            color: #333;
+        }
         button {
-            padding: 10px;
-            width: 85%;
-            background: #007bff;
+            padding: 12px;
+            width: 100%;
+            background: #2c3e50;
             color: white;
             border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 4px;
         }
+        .divider {
+            text-align: center;
+            color: #aaa;
+            margin: 16px 0;
+            font-size: 0.9em;
+            border-top: 1px solid #eee;
+            padding-top: 16px;
+        }
+        .link-row {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 0.9em;
+        }
+        .link-row a { color: #2c3e50; }
+        .forgot-link {
+            display: block;
+            text-align: center;
+            margin-top: 10px;
+            color: #888;
+            font-size: 0.88em;
+            text-decoration: none;
+        }
+        .forgot-link:hover { color: #2c3e50; }
     </style>
 </head>
-
 <body>
+<div class="card">
+    <h2>⛪ Church App</h2>
 
-<h2>Login</h2>
+    <form method="POST">
+        <label>First Name</label>
+        <input name="first_name" placeholder="Your first name"
+               autocomplete="given-name">
 
-<form method="POST">
-    <input name="first_name" placeholder="First Name">
-    <input name="password" type="password" placeholder="Password">
-    <br>
-    <button>Login</button>
-</form>
+        <label>Password</label>
+        <input name="password" type="password" placeholder="Your password"
+               autocomplete="current-password">
 
-{% if error %}
-<p style="color:red;">{{ error }}</p>
-{% endif %}
+        <button>Login</button>
+    </form>
 
-<p>Don't have an account? <a href="/signup">Sign up</a></p>
+    {% if error %}
+        <p style="color:red; text-align:center; margin-top:10px;">
+            {{ error }}
+        </p>
+    {% endif %}
 
+    <a href="/forgot_password" class="forgot-link">
+        Forgot your password?
+    </a>
+
+    <div class="divider"></div>
+
+    <div class="link-row">
+        Don't have an account? <a href="/signup">Sign up</a>
+    </div>
+</div>
 </body>
 </html>

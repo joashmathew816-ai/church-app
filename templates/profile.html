@@ -4,7 +4,8 @@
 
 <h2>Profile</h2>
 
-<div style="background:white; padding:20px; border-radius:10px;">
+<div style="background:white; padding:20px; border-radius:10px;
+            margin-bottom:16px;">
 
 {% if success %}
     <p style="color:green; font-weight:bold;">{{ success }}</p>
@@ -13,13 +14,15 @@
 <form method="POST" id="profileForm">
 
     <label>First Name</label>
-    <input value="{{ current_user.first_name }}" disabled style="background:#ddd;">
+    <input value="{{ current_user.first_name }}" disabled
+           style="background:#ddd;">
 
     <label>Last Name</label>
-    <input value="{{ current_user.last_name }}" disabled style="background:#ddd;">
+    <input value="{{ current_user.last_name }}" disabled
+           style="background:#ddd;">
 
     <p style="color:#888; font-size:0.82em; margin-top:6px;">
-        To change your name, please send a message through
+        To change your name, send a message through
         <a href="/feedback">Feedback</a> and the superuser will update it.
     </p>
 
@@ -82,10 +85,49 @@
     <button type="submit"
             style="background:#2c3e50; color:white; border:none;
                    padding:12px; border-radius:6px; width:100%;">
-        Save
+        Save Profile
     </button>
 
 </form>
+</div>
+
+
+<!-- CHANGE PASSWORD SECTION -->
+<div style="background:white; padding:20px; border-radius:10px;">
+
+    <h3 style="margin-top:0;">🔑 Change Password</h3>
+
+    {% if password_success %}
+        <p style="color:green; font-weight:bold;">{{ password_success }}</p>
+    {% endif %}
+    {% if password_error %}
+        <p style="color:#e74c3c;">{{ password_error }}</p>
+    {% endif %}
+
+    <form method="POST" action="/change_password" id="passwordForm">
+
+        <label>Current Password</label>
+        <input type="password" name="current_password"
+               placeholder="Enter your current password" required>
+
+        <label>New Password</label>
+        <input type="password" name="new_password" id="newPasswordInput"
+               placeholder="Enter new password" required>
+
+        <label>Confirm New Password</label>
+        <input type="password" name="confirm_password" id="confirmPasswordInput"
+               placeholder="Confirm new password" required>
+
+        <span class="field-error" id="passwordMatchError"></span>
+
+        <br>
+        <button type="submit"
+                style="background:#27ae60; color:white; border:none;
+                       padding:12px; border-radius:6px; width:100%;">
+            Update Password
+        </button>
+
+    </form>
 </div>
 
 <script>
@@ -148,12 +190,10 @@ document.getElementById("profileForm").addEventListener("submit", function(e) {
         if (!existing || !existing.classList.contains("field-error")) {
             let span = document.createElement("span");
             span.className   = "field-error";
-            span.textContent = "Please select your address from the dropdown. " +
-                               "If not listed, pick the closest street or option.";
+            span.textContent = "Please select your address from the dropdown.";
             wrapper.insertAdjacentElement("afterend", span);
         } else {
-            existing.textContent = "Please select your address from the dropdown. " +
-                                   "If not listed, pick the closest street or option.";
+            existing.textContent = "Please select your address from the dropdown.";
         }
         valid = false;
     }
@@ -177,6 +217,24 @@ document.getElementById("profileForm").addEventListener("submit", function(e) {
     }
 
     if (!valid) e.preventDefault();
+});
+
+document.getElementById("passwordForm").addEventListener("submit", function(e) {
+    let newPw     = document.getElementById("newPasswordInput").value;
+    let confirmPw = document.getElementById("confirmPasswordInput").value;
+    let errSpan   = document.getElementById("passwordMatchError");
+
+    if (newPw !== confirmPw) {
+        errSpan.textContent = "Passwords do not match.";
+        e.preventDefault();
+        return;
+    }
+    if (newPw.length < 6) {
+        errSpan.textContent = "Password must be at least 6 characters.";
+        e.preventDefault();
+        return;
+    }
+    errSpan.textContent = "";
 });
 
 window.onload = toggleCapacity;

@@ -440,6 +440,37 @@ def profile():
 
     return render_template("profile.html", unread_count=get_unread_count())
 
+# ----------------------
+# CHANGE PASSWORD
+# ----------------------
+@app.route("/change_password", methods=["POST"])
+@login_required
+def change_password():
+    current_pw  = request.form.get("current_password", "")
+    new_pw      = request.form.get("new_password", "").strip()
+    confirm_pw  = request.form.get("confirm_password", "").strip()
+
+    if not check_password_hash(current_user.password, current_pw):
+        return render_template("profile.html",
+                               password_error="Current password is incorrect.",
+                               unread_count=get_unread_count())
+
+    if new_pw != confirm_pw:
+        return render_template("profile.html",
+                               password_error="New passwords do not match.",
+                               unread_count=get_unread_count())
+
+    if len(new_pw) < 6:
+        return render_template("profile.html",
+                               password_error="Password must be at least 6 characters.",
+                               unread_count=get_unread_count())
+
+    current_user.password = generate_password_hash(new_pw)
+    db.session.commit()
+
+    return render_template("profile.html",
+                           password_success="✅ Password updated successfully!",
+                           unread_count=get_unread_count())
 
 # ----------------------
 # SAVE PUSH TOKEN
@@ -1163,6 +1194,18 @@ def setup():
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
+@app.route("/test_notification")
+@login_required
+def test_notification():
+    try:
+        send_notification(
+            current_user.id,
+            "✅ Test Notification",
+            "If you see this, notifications are working!"
+        )
+        return "Notification sent! Check your device."
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 @app.cli.command("create-db")
 def create_db():
