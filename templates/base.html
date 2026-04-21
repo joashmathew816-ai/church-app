@@ -195,6 +195,92 @@
             });
         }
     </script>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
+
+    <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCWRfI4zUk27QGPbO6crBwIuRr5xpoS0xk",
+        authDomain: "church-app-21147.firebaseapp.com",
+        projectId: "church-app-21147",
+        storageBucket: "church-app-21147.firebasestorage.app",
+        messagingSenderId: "681140747186",
+        appId: "1:681140747186:web:c5c0957b553e2361e902ab"
+    };
+
+    let messaging = null;
+
+    try {
+        firebase.initializeApp(firebaseConfig);
+        messaging = firebase.messaging();
+
+        // Handle foreground notifications as an in-app banner
+        messaging.onMessage(function(payload) {
+            let banner = document.createElement("div");
+            banner.style.cssText =
+                "position:fixed; top:0; left:0; right:0; " +
+                "background:#2c3e50; color:white; padding:12px 16px; " +
+                "z-index:99999; font-family:Arial; font-size:0.95em; " +
+                "display:flex; justify-content:space-between; align-items:center;";
+            banner.innerHTML = `
+                <div>
+                    <b>${payload.notification.title}</b><br>
+                    <span style="font-size:0.9em;">
+                        ${payload.notification.body}
+                    </span>
+                </div>
+                <span onclick="this.parentElement.remove()"
+                    style="cursor:pointer; font-size:1.4em; padding-left:14px;">
+                    ✕
+                </span>`;
+            document.body.prepend(banner);
+            setTimeout(function() {
+                if (banner.parentElement) banner.remove();
+            }, 7000);
+        });
+    } catch(e) {
+        console.log("Firebase init error:", e);
+    }
+
+    async function requestNotificationPermission() {
+        try {
+            if (!messaging) return;
+            const permission = await Notification.requestPermission();
+            if (permission !== "granted") return;
+
+            const swReg = await navigator.serviceWorker.register(
+                "/firebase-messaging-sw.js", { scope: "/" });
+
+            const token = await messaging.getToken({
+                vapidKey: "YOUR_VAPID_KEY",
+                serviceWorkerRegistration: swReg
+            });
+
+            if (token) {
+                await fetch("/save_push_token", {
+                    method:  "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body:    JSON.stringify({ token: token })
+                });
+            }
+        } catch(err) {
+            console.log("Notification setup error:", err);
+        }
+    }
+
+    {% if current_user.is_authenticated %}
+    window.addEventListener("load", function() {
+        if ("Notification" in window && Notification.permission === "default") {
+            setTimeout(requestNotificationPermission, 3000);
+        } else if ("Notification" in window && Notification.permission === "granted") {
+            // Already granted, just refresh the token silently
+            setTimeout(requestNotificationPermission, 1000);
+        }
+    });
+    {% endif %}
+    </script>
 </head>
 
 <body>

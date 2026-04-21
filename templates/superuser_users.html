@@ -15,10 +15,20 @@
      id="user_card_{{ u.id }}">
 
     <div style="display:flex; justify-content:space-between;
-                align-items:center; margin-bottom:12px;">
+                align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
         <b style="font-size:1.05em;">{{ u.first_name }} {{ u.last_name }}</b>
-        <span style="background:#eaf4fb; color:#2980b9; padding:4px 10px;
-                     border-radius:12px; font-size:0.85em;">{{ u.role }}</span>
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            {% if u.id in reset_user_ids %}
+                <span style="background:#fff3cd; color:#856404; padding:4px 10px;
+                             border-radius:12px; font-size:0.8em; border:1px solid #ffc107;">
+                    🔑 Reset Requested
+                </span>
+            {% endif %}
+            <span style="background:#eaf4fb; color:#2980b9; padding:4px 10px;
+                         border-radius:12px; font-size:0.85em;">
+                {{ u.role }}
+            </span>
+        </div>
     </div>
 
     <div id="msg_{{ u.id }}" style="display:none; margin-bottom:10px;"></div>
@@ -27,17 +37,14 @@
           onsubmit="return validateForm({{ u.id }})">
         <input type="hidden" name="user_id" value="{{ u.id }}">
 
-        <!-- FIRST NAME -->
         <label>First Name</label>
         <input name="first_name" value="{{ u.first_name }}"
                placeholder="First name" required>
 
-        <!-- LAST NAME -->
         <label>Last Name</label>
         <input name="last_name" value="{{ u.last_name }}"
                placeholder="Last name" required>
 
-        <!-- ROLE -->
         <label>Role</label>
         {% if u.id == current_user.id %}
             <input value="Superuser (you)" disabled style="background:#ddd;">
@@ -54,12 +61,10 @@
             </select>
         {% endif %}
 
-        <!-- PHONE -->
         <label>Phone Number</label>
         <input name="phone" value="{{ u.phone or '' }}"
                placeholder="e.g. 519-555-1234">
 
-        <!-- ADDRESS -->
         <label>Address</label>
         <div class="autocomplete-wrapper">
             <input name="address" id="address_{{ u.id }}"
@@ -74,7 +79,6 @@
             Must select from dropdown. If not found, pick the closest street.
         </small>
 
-        <!-- DRIVER -->
         <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
             <input type="checkbox" name="is_driver" id="driverCheck_{{ u.id }}"
                    {% if u.is_driver %}checked{% endif %}
@@ -86,20 +90,43 @@
             ⚠️ Changing driver status removes votes on ineligible polls.
         </p>
 
-        <!-- CAPACITY -->
         <div id="capacityDiv_{{ u.id }}"
              style="display:{{ 'block' if u.is_driver else 'none' }};
                     margin-top:6px; margin-bottom:6px;">
             <label>
                 Passenger Capacity
                 <span style="font-weight:normal; color:#888; font-size:0.85em;">
-                    — number of passengers you can carry (excluding yourself)
+                    — excluding yourself
                 </span>
             </label>
             <input type="number" name="capacity" id="capacityInput_{{ u.id }}"
                    min="1" max="8" value="{{ u.capacity or '' }}"
                    style="width:100px;">
             <span class="field-error" id="capacityError_{{ u.id }}"></span>
+        </div>
+
+        <!-- PASSWORD RESET -->
+        <div style="margin-top:16px; padding:12px; border-radius:8px;
+                    background:{{ '#fff3cd' if u.id in reset_user_ids else '#f8f9fa' }};
+                    border:1px solid {{ '#ffc107' if u.id in reset_user_ids else '#eee' }};">
+            {% if u.id in reset_user_ids %}
+                <p style="margin:0 0 8px 0; color:#856404;
+                          font-weight:bold; font-size:0.9em;">
+                    🔑 This user has requested a password reset
+                </p>
+            {% endif %}
+            <label>
+                Set New Password
+                <span style="font-weight:normal; color:#888; font-size:0.85em;">
+                    — leave blank to keep current password
+                </span>
+            </label>
+            <input type="password" name="new_password"
+                   placeholder="Type new temporary password..."
+                   autocomplete="new-password">
+            <small style="color:#888; display:block; margin-top:4px;">
+                The user will be notified via push notification.
+            </small>
         </div>
 
         <br>
@@ -121,7 +148,8 @@
                     border:1px solid #e74c3c; padding:10px;
                     border-radius:6px; margin-bottom:8px;">
             <p style="margin:0 0 8px 0; color:#c0392b; font-size:0.9em;">
-                Permanently delete <b>{{ u.first_name }} {{ u.last_name }}</b>?
+                Permanently delete
+                <b>{{ u.first_name }} {{ u.last_name }}</b>?
                 All their votes and data will be removed.
             </p>
             <div style="display:flex; gap:8px;">
@@ -213,8 +241,7 @@ function validateForm(userId) {
     if (!addressConfirmed[userId]) {
         let err = document.getElementById("addressError_" + userId);
         let inp = document.getElementById("address_" + userId);
-        err.textContent       = "Please select the address from the dropdown. " +
-                                "If not found, pick the closest street or option.";
+        err.textContent       = "Please select the address from the dropdown.";
         inp.style.borderColor = "#e74c3c";
         valid = false;
     }
@@ -238,12 +265,12 @@ function validateForm(userId) {
 }
 
 function showUserDelete(userId) {
-    document.getElementById("deleteConfirm_" + userId).style.display = "block";
+    document.getElementById("deleteConfirm_"  + userId).style.display = "block";
     document.getElementById("deleteUserBtn_" + userId).style.display  = "none";
 }
 
 function cancelUserDelete(userId) {
-    document.getElementById("deleteConfirm_" + userId).style.display = "none";
+    document.getElementById("deleteConfirm_"  + userId).style.display = "none";
     document.getElementById("deleteUserBtn_" + userId).style.display  = "block";
 }
 

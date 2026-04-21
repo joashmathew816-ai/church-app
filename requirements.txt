@@ -6,3 +6,4 @@ ortools
 requests
 gunicorn
 psycopg2-binary
+firebase-admin

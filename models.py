@@ -44,3 +44,17 @@ class Feedback(db.Model):
     message    = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_read    = db.Column(db.Boolean, default=False)
+
+
+class PushToken(db.Model):
+    id      = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)
+    token   = db.Column(db.Text)
+    updated = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class PasswordResetRequest(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_handled = db.Column(db.Boolean, default=False)
