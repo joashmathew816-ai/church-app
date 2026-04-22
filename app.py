@@ -242,15 +242,6 @@ def manifest():
     return response
 
 
-@app.route("/firebase-messaging-sw.js")
-def firebase_sw():
-    response = make_response(
-        send_from_directory(app.static_folder, "firebase-messaging-sw.js"))
-    response.headers["Content-Type"]          = "application/javascript"
-    response.headers["Service-Worker-Allowed"] = "/"
-    return response
-
-
 @app.route("/offline")
 def offline():
     return render_template("offline.html")
