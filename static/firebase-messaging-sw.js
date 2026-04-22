@@ -13,14 +13,13 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage(function(payload) {
-  console.log("Background message received:", payload);
-
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: "/static/icons/icon-192.png",
-    badge: "/static/icons/icon-192.png"
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
+    console.log("Background message received:", payload);
+    self.registration.showNotification(
+        payload.notification.title,
+        {
+            body:  payload.notification.body,
+            icon:  "/static/icons/icon-192.png",
+            badge: "/static/icons/icon-192.png"
+        }
+    );
 });
