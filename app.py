@@ -1,14 +1,16 @@
 from flask import Flask, make_response, render_template, request, redirect, jsonify, send_from_directory
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Poll, PollResponse, Feedback, PushToken, PasswordResetRequest
+from models import db, User, Poll, PollResponse, Feedback, PushToken, PasswordResetRequest, RouteRelease
 from optimizer import optimize_morning, optimize_return
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
-from urllib.parse import quote
+from urllib.parse import quote, quote_plus
 import threading
 import time
 import os
+import json
+import requests as http_requests
 
 app = Flask(__name__)
 
@@ -25,6 +27,11 @@ login_manager.init_app(app)
 login_manager.login_view = "login"
 
 LOCAL_TZ = ZoneInfo("America/Toronto")
+
+# ntfy topic — set this as an environment variable on Render
+# Users subscribe to this topic in the ntfy app
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "church-app-notifications")
+NTFY_URL   = f"https://ntfy.sh/{NTFY_TOPIC}"
 
 
 @login_manager.user_loader
@@ -86,7 +93,6 @@ def user_eligible_for_poll(user, poll):
 
 
 def get_unread_count():
-    """Badge count for Manage Users — pending password reset requests."""
     try:
         if current_user.is_authenticated and current_user.role == "superuser":
             return PasswordResetRequest.query.filter_by(
@@ -97,7 +103,6 @@ def get_unread_count():
 
 
 def get_feedback_unread_count():
-    """Separate count for unread feedback messages."""
     try:
         if current_user.is_authenticated and current_user.role == "superuser":
             return Feedback.query.filter_by(is_read=False).count()
@@ -107,77 +112,65 @@ def get_feedback_unread_count():
 
 
 # ----------------------
-# FIREBASE NOTIFICATIONS
+# NTFY NOTIFICATIONS
 # ----------------------
-def get_firebase_app():
+def send_ntfy(title, message, priority="default", tags=None):
+    """
+    Send a notification via ntfy.sh.
+    Priority options: min, low, default, high, urgent
+    urgent = stays until acknowledged (perfect for polls and routes)
+    """
     try:
-        import firebase_admin
-        from firebase_admin import credentials
-        if not firebase_admin._apps:
-            cred = credentials.Certificate({
-                "type":                        "service_account",
-                "project_id":                  os.environ.get("FIREBASE_PROJECT_ID"),
-                "private_key_id":              os.environ.get("FIREBASE_PRIVATE_KEY_ID"),
-                "private_key":                 os.environ.get(
-                    "FIREBASE_PRIVATE_KEY", "").replace("\\n", "\n"),
-                "client_email":                os.environ.get("FIREBASE_CLIENT_EMAIL"),
-                "client_id":                   os.environ.get("FIREBASE_CLIENT_ID"),
-                "auth_uri":                    "https://accounts.google.com/o/oauth2/auth",
-                "token_uri":                   "https://oauth2.googleapis.com/token",
-                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                "client_x509_cert_url":        f"https://www.googleapis.com/robot/v1/metadata/x509/{os.environ.get('FIREBASE_CLIENT_EMAIL', '').replace('@', '%40')}"
-            })
-            firebase_admin.initialize_app(cred)
-        return True
-    except Exception as e:
-        app.logger.error(f"Firebase init error: {e}")
-        return False
+        headers = {
+            "Title":    title,
+            "Priority": priority,
+        }
+        if tags:
+            headers["Tags"] = ",".join(tags)
 
-
-def send_notification(user_id, title, body):
-    try:
-        if not get_firebase_app():
-            app.logger.error("Firebase not initialized")
-            return
-        from firebase_admin import messaging as fb_messaging
-        pt = PushToken.query.filter_by(user_id=user_id).first()
-        if not pt or not pt.token:
-            app.logger.warning(f"No push token for user {user_id}")
-            return
-        message = fb_messaging.Message(
-            notification=fb_messaging.Notification(
-                title=title,
-                body=body
-            ),
-            token=pt.token,
-            webpush=fb_messaging.WebpushConfig(
-                notification=fb_messaging.WebpushNotification(
-                    title=title,
-                    body=body,
-                    icon="/static/icons/icon-192.png"
-                )
-            )
+        http_requests.post(
+            NTFY_URL,
+            data=message.encode("utf-8"),
+            headers=headers,
+            timeout=10
         )
-        response = fb_messaging.send(message)
-        app.logger.info(f"Notification sent to user {user_id}: {response}")
+        app.logger.info(f"ntfy sent: {title}")
     except Exception as e:
-        app.logger.error(f"Push failed for user {user_id}: {e}")
+        app.logger.error(f"ntfy error: {e}")
 
 
 def notify_new_poll(poll):
+    """Notify everyone when a new poll is created."""
     try:
-        for user in User.query.all():
-            if user_eligible_for_poll(user, poll):
-                send_notification(
-                    user.id,
-                    "📊 New Poll Available",
-                    f'"{poll.title}" is waiting for your response!'
-                )
+        send_ntfy(
+            title    = "📊 New Poll Available",
+            message  = f'"{poll.title}" is open for responses. '
+                       f'Open Church App to vote!',
+            priority = "high",
+            tags     = ["ballot_box"]
+        )
     except Exception as e:
         app.logger.error(f"notify_new_poll error: {e}")
 
 
+def notify_route_released(direction, destination):
+    """Notify everyone when routes are released."""
+    try:
+        dir_label = {"morning": "Morning", "return": "Return",
+                     "both": "Morning & Return"}.get(direction, direction)
+        send_ntfy(
+            title    = "🚗 Routes Released",
+            message  = f'{dir_label} routes to {destination} have been '
+                       f'released. Open Church App to see your assignment!',
+            priority = "urgent",
+            tags     = ["car", "rotating_light"]
+        )
+    except Exception as e:
+        app.logger.error(f"notify_route_released error: {e}")
+
+
 def check_closing_notifications():
+    """Background task — send poll closing warnings."""
     with app.app_context():
         try:
             now   = now_utc_naive()
@@ -186,34 +179,63 @@ def check_closing_notifications():
                 if poll_is_closed(poll):
                     continue
                 mins_left = (poll.closes_at - now).total_seconds() / 60
-                for user in User.query.all():
-                    if not user_eligible_for_poll(user, poll):
-                        continue
-                    voted = PollResponse.query.filter_by(
-                        user_id=user.id, poll_id=poll.id).first()
-                    if voted:
-                        continue
-                    if 28 <= mins_left <= 32:
-                        send_notification(
-                            user.id,
-                            "⏰ Poll Closing Soon",
-                            f'"{poll.title}" closes in about 30 minutes!'
-                        )
-                    elif 3 <= mins_left <= 7:
-                        send_notification(
-                            user.id,
-                            "🚨 Last Chance to Vote",
-                            f'"{poll.title}" closes in about 5 minutes!'
-                        )
+                if 28 <= mins_left <= 32:
+                    send_ntfy(
+                        title    = "⏰ Poll Closing Soon",
+                        message  = f'"{poll.title}" closes in about '
+                                   f'30 minutes! Open Church App to vote.',
+                        priority = "high",
+                        tags     = ["warning"]
+                    )
+                elif 3 <= mins_left <= 7:
+                    send_ntfy(
+                        title    = "🚨 Last Chance to Vote",
+                        message  = f'"{poll.title}" closes in about '
+                                   f'5 minutes!',
+                        priority = "urgent",
+                        tags     = ["rotating_light"]
+                    )
         except Exception as e:
             app.logger.error(f"check_closing_notifications error: {e}")
 
 
+def check_poll_reminders():
+    """
+    Every 6 hours, send a reminder for any open polls
+    that the user has not responded to yet.
+    """
+    with app.app_context():
+        try:
+            open_polls = [p for p in Poll.query.all()
+                          if not poll_is_closed(p)]
+            if not open_polls:
+                return
+
+            poll_titles = [f'"{p.title}"' for p in open_polls]
+            send_ntfy(
+                title    = "📊 Open Polls Reminder",
+                message  = f"You have {len(open_polls)} open poll(s) "
+                           f"waiting for your response: "
+                           f"{', '.join(poll_titles)}. "
+                           f"Open Church App to vote!",
+                priority = "default",
+                tags     = ["reminder"]
+            )
+        except Exception as e:
+            app.logger.error(f"check_poll_reminders error: {e}")
+
+
 def start_scheduler():
     def run():
+        reminder_counter = 0
         while True:
-            time.sleep(300)
+            time.sleep(300)  # 5 minutes
             check_closing_notifications()
+            reminder_counter += 1
+            # Every 72 cycles of 5 minutes = 6 hours
+            if reminder_counter >= 72:
+                check_poll_reminders()
+                reminder_counter = 0
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
 
@@ -223,13 +245,34 @@ with app.app_context():
 
 
 # ----------------------
-# STATIC FILE ROUTES
+# GOOGLE MAPS ROUTE LINK
+# ----------------------
+def build_maps_url(stops, destination):
+    """
+    Build a Google Maps URL with waypoints for drivers.
+    stops = list of address strings in order
+    destination = final destination address
+    """
+    if not stops:
+        return None
+
+    base = "https://www.google.com/maps/dir/"
+
+    # Add each stop as a waypoint, end at destination
+    parts = [quote_plus(s) for s in stops]
+    parts.append(quote_plus(destination))
+
+    return base + "/".join(parts)
+
+
+# ----------------------
+# STATIC FILES
 # ----------------------
 @app.route("/sw.js")
 def service_worker():
     response = make_response(
         send_from_directory(app.static_folder, "sw.js"))
-    response.headers["Content-Type"]          = "application/javascript"
+    response.headers["Content-Type"]           = "application/javascript"
     response.headers["Service-Worker-Allowed"] = "/"
     return response
 
@@ -326,51 +369,38 @@ def forgot_password():
         if not first or not last:
             return render_template("forgot_password.html",
                                    error="Please fill in both fields.")
-
         try:
             user = User.query.filter_by(
                 first_name=first, last_name=last).first()
-
             if not user:
                 return render_template("forgot_password.html",
-                                       error="No account found with that name. "
-                                       "Please check your spelling.")
+                                       error="No account found with that name.")
 
-            # Delete old unhandled requests cleanly
-            try:
-                old_requests = PasswordResetRequest.query.filter_by(
-                    user_id=user.id, is_handled=False).all()
-                for old in old_requests:
-                    db.session.delete(old)
-                db.session.flush()
-            except Exception:
-                db.session.rollback()
+            old_requests = PasswordResetRequest.query.filter_by(
+                user_id=user.id, is_handled=False).all()
+            for old in old_requests:
+                db.session.delete(old)
+            db.session.flush()
 
-            # Create fresh request
-            new_request = PasswordResetRequest(user_id=user.id)
-            db.session.add(new_request)
+            db.session.add(PasswordResetRequest(user_id=user.id))
             db.session.commit()
 
-            # Notify superusers — wrapped separately so a push failure
-            # does not crash the whole request
             try:
-                superusers = User.query.filter_by(role="superuser").all()
-                for su in superusers:
-                    send_notification(
-                        su.id,
-                        "🔑 Password Reset Request",
-                        f"{user.first_name} {user.last_name} "
-                        f"needs a password reset."
-                    )
-            except Exception as e:
-                app.logger.error(f"Could not notify superuser: {e}")
+                send_ntfy(
+                    title    = "🔑 Password Reset Request",
+                    message  = f"{user.first_name} {user.last_name} has "
+                               f"requested a password reset. Open Church App "
+                               f"→ Manage Users to handle this.",
+                    priority = "high",
+                    tags     = ["key"]
+                )
+            except Exception:
+                pass
 
             return render_template("forgot_password.html",
-                                   success="Your request has been sent to "
-                                   "the superuser. They will set a temporary "
-                                   "password for you. Please check back or "
-                                   "contact them directly.")
-
+                                   success="Your request has been sent. "
+                                   "The superuser will set a temporary "
+                                   "password for you soon.")
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Forgot password error: {e}")
@@ -386,10 +416,72 @@ def forgot_password():
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    # Get the most recent active route release
+    active_release = RouteRelease.query.filter_by(
+        is_active=True).order_by(RouteRelease.created_at.desc()).first()
+
+    driver_info    = None
+    passenger_info = None
+
+    if active_release:
+        try:
+            route_data = json.loads(active_release.route_data)
+            user_name  = (current_user.first_name + " " +
+                          current_user.last_name)
+
+            # Look through morning and return routes
+            for direction in ["morning", "return"]:
+                result = route_data.get(direction)
+                if not result or "routes" not in result:
+                    continue
+
+                for route in result["routes"]:
+                    # Check if this user is the driver
+                    if route["driver"] == user_name:
+                        stops        = [s["address"] for s in route["stops"]]
+                        passengers_list = []
+                        for stop in route["stops"]:
+                            for pname in stop["passengers"]:
+                                passengers_list.append({
+                                    "name":    pname,
+                                    "address": stop["address"]
+                                })
+
+                        # Build Google Maps URL
+                        all_stops = [s["address"] for s in route["stops"]]
+                        maps_url  = build_maps_url(
+                            all_stops, active_release.destination)
+
+                        driver_info = {
+                            "direction":   direction,
+                            "destination": active_release.destination,
+                            "passengers":  passengers_list,
+                            "time_min":    route["time_min"],
+                            "distance_km": route["distance_km"],
+                            "maps_url":    maps_url
+                        }
+
+                    # Check if this user is a passenger in any stop
+                    for stop in route["stops"]:
+                        for pname in stop["passengers"]:
+                            if pname == user_name:
+                                passenger_info = {
+                                    "direction":   direction,
+                                    "destination": active_release.destination,
+                                    "driver":      route["driver"],
+                                    "address":     stop["address"],
+                                }
+
+        except Exception as e:
+            app.logger.error(f"Dashboard route parse error: {e}")
+
     return render_template("dashboard.html",
                            incomplete=not profile_complete(current_user),
                            unread_count=get_unread_count(),
-                           feedback_unread=get_feedback_unread_count())
+                           feedback_unread=get_feedback_unread_count(),
+                           driver_info=driver_info,
+                           passenger_info=passenger_info,
+                           active_release=active_release)
 
 
 # ----------------------
@@ -404,7 +496,7 @@ def profile():
 
         if not address:
             return render_template("profile.html",
-                                   error_address="Please select a valid address from the dropdown",
+                                   error_address="Please select a valid address",
                                    unread_count=get_unread_count())
 
         old_is_driver      = current_user.is_driver
@@ -461,12 +553,10 @@ def change_password():
         return render_template("profile.html",
                                password_error="Current password is incorrect.",
                                unread_count=get_unread_count())
-
     if new_pw != confirm_pw:
         return render_template("profile.html",
                                password_error="New passwords do not match.",
                                unread_count=get_unread_count())
-
     if len(new_pw) < 6:
         return render_template("profile.html",
                                password_error="Password must be at least 6 characters.",
@@ -475,7 +565,7 @@ def change_password():
     current_user.password = generate_password_hash(new_pw)
     db.session.commit()
     return render_template("profile.html",
-                           password_success="✅ Password updated successfully!",
+                           password_success="✅ Password updated!",
                            unread_count=get_unread_count())
 
 
@@ -543,8 +633,10 @@ def polls():
         for poll in Poll.query.all():
             if current_user.role not in ("admin", "superuser"):
                 if not (poll.target == "everyone"
-                        or (poll.target == "drivers"    and current_user.is_driver)
-                        or (poll.target == "passengers" and not current_user.is_driver)):
+                        or (poll.target == "drivers"
+                            and current_user.is_driver)
+                        or (poll.target == "passengers"
+                            and not current_user.is_driver)):
                     continue
 
             user_eligible = (poll.target in ("everyone", "drivers")
@@ -628,7 +720,7 @@ def superuser_users():
         if not address:
             return redirect(
                 f"/superuser/users?error_id={user_id}"
-                f"&error_msg={quote('Please select a valid address from the dropdown')}")
+                f"&error_msg={quote('Please select a valid address')}")
 
         new_role = ("superuser" if user.id == current_user.id
                     else request.form.get("role", "user"))
@@ -662,25 +754,24 @@ def superuser_users():
                     if stale:
                         db.session.delete(stale)
 
-        # Handle password reset
         new_password = request.form.get("new_password", "").strip()
         if new_password:
             user.password = generate_password_hash(new_password)
-            # Mark all pending reset requests as handled
             for req in PasswordResetRequest.query.filter_by(
                     user_id=user.id, is_handled=False).all():
                 req.is_handled = True
-            # Notify the user
             try:
-                send_notification(
-                    user.id,
-                    "🔑 Password Reset",
-                    f"Your password has been reset. "
-                    f"Temporary password: {new_password} — "
-                    f"please log in and change it from your profile."
+                send_ntfy(
+                    title    = "🔑 Password Reset",
+                    message  = f"Hi {user.first_name}, your Church App "
+                               f"password has been reset. Temporary password: "
+                               f"{new_password} — please log in and change it "
+                               f"from your Profile page.",
+                    priority = "high",
+                    tags     = ["key"]
                 )
             except Exception as e:
-                app.logger.error(f"Could not notify user of reset: {e}")
+                app.logger.error(f"ntfy reset notify error: {e}")
 
         user.first_name = (request.form.get("first_name", "").strip()
                            or user.first_name)
@@ -784,7 +875,6 @@ def create_poll():
             notify_new_poll(poll)
         except Exception as e:
             db.session.rollback()
-            app.logger.error(f"Create poll error: {e}")
             return render_template("create_poll.html",
                                    error=f"Could not save poll: {str(e)}",
                                    all_polls=get_all_polls_json(),
@@ -950,8 +1040,8 @@ def polls_for_routes():
     try:
         result = []
         for poll in Poll.query.all():
-            options_list = ([o.strip() for o in poll.options.split("|||") if o.strip()]
-                            if poll.options else [])
+            options_list = ([o.strip() for o in poll.options.split("|||")
+                              if o.strip()] if poll.options else [])
             counts = {opt: 0 for opt in options_list}
             voters = {opt: [] for opt in options_list}
             for r in PollResponse.query.filter_by(poll_id=poll.id).all():
@@ -1027,6 +1117,65 @@ def generate_routes():
 
 
 # ----------------------
+# ADMIN: RELEASE ROUTES
+# ----------------------
+@app.route("/admin/release_routes", methods=["POST"])
+@login_required
+def release_routes():
+    if current_user.role not in ("admin", "superuser"):
+        return jsonify({"error": "Access Denied"}), 403
+
+    data        = request.get_json()
+    route_data  = data.get("route_data")
+    destination = data.get("destination", "").strip()
+    direction   = data.get("direction", "both")
+
+    if not route_data or not destination:
+        return jsonify({"error": "Missing route data or destination"})
+
+    try:
+        # Deactivate any previous releases
+        RouteRelease.query.update({"is_active": False})
+
+        # Save the new release
+        release = RouteRelease(
+            created_by  = current_user.id,
+            direction   = direction,
+            destination = destination,
+            route_data  = json.dumps(route_data),
+            is_active   = True
+        )
+        db.session.add(release)
+        db.session.commit()
+
+        # Notify everyone via ntfy
+        notify_route_released(direction, destination)
+
+        return jsonify({"status": "ok", "message": "Routes released!"})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Release routes error: {e}")
+        return jsonify({"error": str(e)})
+
+
+# ----------------------
+# ADMIN: CLEAR RELEASED ROUTES
+# ----------------------
+@app.route("/admin/clear_routes", methods=["POST"])
+@login_required
+def clear_routes():
+    if current_user.role not in ("admin", "superuser"):
+        return jsonify({"error": "Access Denied"}), 403
+    try:
+        RouteRelease.query.update({"is_active": False})
+        db.session.commit()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)})
+
+
+# ----------------------
 # FEEDBACK
 # ----------------------
 @app.route("/feedback", methods=["GET", "POST"])
@@ -1036,7 +1185,7 @@ def feedback():
         message = request.form.get("message", "").strip()
         if not message:
             return render_template("feedback.html",
-                                   error="Please write something before submitting.",
+                                   error="Please write something.",
                                    unread_count=get_unread_count())
         db.session.add(Feedback(user_id=current_user.id, message=message))
         db.session.commit()
@@ -1118,62 +1267,11 @@ def logout():
 
 
 # ----------------------
-# TEST NOTIFICATION
-# ----------------------
-@app.route("/test_notification")
-@login_required
-def test_notification():
-    try:
-        send_notification(
-            current_user.id,
-            "✅ Test Notification",
-            "If you see this, notifications are working!"
-        )
-        pt = PushToken.query.filter_by(user_id=current_user.id).first()
-        return (f"Notification sent to user {current_user.first_name}.<br>"
-                f"Token exists: {'YES' if pt else 'NO'}<br>"
-                f"Check your phone — if nothing appears within 10 seconds, "
-                f"visit /debug_firebase as superuser.")
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-
-# ----------------------
-# DEBUG FIREBASE (superuser only)
-# ----------------------
-@app.route("/debug_firebase")
-@login_required
-def debug_firebase():
-    if current_user.role != "superuser":
-        return "Access denied", 403
-    try:
-        pk      = os.environ.get("FIREBASE_PRIVATE_KEY", "NOT SET")
-        project = os.environ.get("FIREBASE_PROJECT_ID", "NOT SET")
-        email   = os.environ.get("FIREBASE_CLIENT_EMAIL", "NOT SET")
-        tokens  = PushToken.query.count()
-        your_token = PushToken.query.filter_by(
-            user_id=current_user.id).first()
-        lines = [
-            f"<b>Project ID:</b> {project}",
-            f"<b>Client Email:</b> {email}",
-            f"<b>Key set:</b> {'YES' if pk != 'NOT SET' else 'NO'}",
-            f"<b>Key starts with:</b> {pk[:40] if pk != 'NOT SET' else 'N/A'}",
-            f"<b>Key has newlines:</b> {'YES' if chr(10) in pk or chr(92)+'n' in pk else 'NO — THIS IS THE PROBLEM'}",
-            f"<b>Total tokens in DB:</b> {tokens}",
-            f"<b>Your token:</b> {'YES — ' + your_token.token[:30] + '...' if your_token else 'NO TOKEN — allow notifications in browser first'}",
-        ]
-        return "<br>".join(lines)
-    except Exception as e:
-        return f"Debug error: {str(e)}"
-
-
-# ----------------------
 # SETUP + MIGRATE
 # ----------------------
 @app.route("/setup")
 def setup():
     try:
-        # Creates ALL tables including new ones like password_reset_request
         db.create_all()
 
         if not User.query.filter_by(first_name="Admin").first():
@@ -1193,7 +1291,7 @@ def setup():
             ))
 
         db.session.commit()
-        return ("✅ Setup complete! All tables created.<br>"
+        return ("✅ Setup complete!<br>"
                 "Admin: Admin / admin123<br>"
                 "Superuser: Super / super123")
     except Exception as e:
@@ -1202,11 +1300,9 @@ def setup():
 
 @app.route("/migrate")
 def migrate():
-    """Run this once to add missing columns to existing tables."""
     try:
-        results = []
         db.create_all()
-        results.append("✅ All tables created/verified")
+        results = ["✅ All tables created/verified"]
 
         with db.engine.connect() as conn:
             for table, column, col_type in [
@@ -1214,16 +1310,19 @@ def migrate():
             ]:
                 try:
                     conn.execute(db.text(
-                        f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+                        f"ALTER TABLE {table} "
+                        f"ADD COLUMN {column} {col_type}"
                     ))
                     conn.commit()
                     results.append(f"✅ Added {column} to {table}")
                 except Exception as e:
                     err = str(e).lower()
                     if "already exists" in err or "duplicate" in err:
-                        results.append(f"✅ {table}.{column} already exists")
+                        results.append(
+                            f"✅ {table}.{column} already exists")
                     else:
-                        results.append(f"❌ {table}.{column}: {str(e)}")
+                        results.append(
+                            f"❌ {table}.{column}: {str(e)}")
 
         return "<br>".join(results)
     except Exception as e:
@@ -1237,4 +1336,4 @@ def create_db():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0") 
+    app.run(debug=True, host="0.0.0.0")

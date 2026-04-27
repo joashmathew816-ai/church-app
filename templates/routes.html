@@ -5,7 +5,8 @@
 <h2>🚗 Generate Routes</h2>
 
 <!-- DESTINATION ADDRESS -->
-<div style="background:white; padding:20px; border-radius:10px; margin-bottom:16px;">
+<div style="background:white; padding:20px; border-radius:10px;
+            margin-bottom:16px;">
     <label><b>Destination Address</b></label>
     <p style="color:#888; font-size:0.85em; margin:4px 0 8px 0;">
         e.g. church, campsite, event venue
@@ -14,25 +15,30 @@
         <input id="churchAddress"
                placeholder="Start typing the destination address..."
                autocomplete="off">
-        <div class="autocomplete-list" id="churchDropdown" style="display:none;"></div>
+        <div class="autocomplete-list" id="churchDropdown"
+             style="display:none;"></div>
     </div>
 </div>
 
 <!-- MODE -->
-<div style="background:white; padding:16px 20px; border-radius:10px; margin-bottom:16px;">
+<div style="background:white; padding:16px 20px; border-radius:10px;
+            margin-bottom:16px;">
     <p style="font-weight:bold; margin:0 0 10px 0;">Route Direction</p>
     <div style="display:flex; flex-direction:column; gap:10px;">
-        <label style="font-weight:normal; display:flex; align-items:center; gap:10px; margin:0;">
+        <label style="font-weight:normal; display:flex;
+                      align-items:center; gap:10px; margin:0;">
             <input type="radio" name="mode" value="morning" checked
                    style="width:18px; height:18px; flex-shrink:0;">
             🌅 Morning (to destination)
         </label>
-        <label style="font-weight:normal; display:flex; align-items:center; gap:10px; margin:0;">
+        <label style="font-weight:normal; display:flex;
+                      align-items:center; gap:10px; margin:0;">
             <input type="radio" name="mode" value="return"
                    style="width:18px; height:18px; flex-shrink:0;">
             🌙 Return (from destination)
         </label>
-        <label style="font-weight:normal; display:flex; align-items:center; gap:10px; margin:0;">
+        <label style="font-weight:normal; display:flex;
+                      align-items:center; gap:10px; margin:0;">
             <input type="radio" name="mode" value="both"
                    style="width:18px; height:18px; flex-shrink:0;">
             🔄 Both
@@ -41,13 +47,15 @@
 </div>
 
 <!-- STEP 1: DRIVERS -->
-<div style="background:white; padding:20px; border-radius:10px; margin-bottom:16px;">
+<div style="background:white; padding:20px; border-radius:10px;
+            margin-bottom:16px;">
     <h3 style="margin-top:0;">Step 1 — Select Driver Poll</h3>
     <p style="color:#888; font-size:0.9em; margin-top:0;">
-        Tap a poll to expand it, then tap the option that means "I am a driver".
-        Tap the poll again to collapse it.
+        Tap a poll to expand it, then tap the option that means
+        "I am a driver". Tap again to collapse.
     </p>
-    <div id="driverPollList" style="display:flex; flex-direction:column; gap:8px;">
+    <div id="driverPollList"
+         style="display:flex; flex-direction:column; gap:8px;">
         <p style="color:#aaa;">Loading polls...</p>
     </div>
     <div id="driverPreview" style="display:none; margin-top:12px;
@@ -58,13 +66,15 @@
 </div>
 
 <!-- STEP 2: PASSENGERS -->
-<div style="background:white; padding:20px; border-radius:10px; margin-bottom:16px;">
+<div style="background:white; padding:20px; border-radius:10px;
+            margin-bottom:16px;">
     <h3 style="margin-top:0;">Step 2 — Select Passenger Poll</h3>
     <p style="color:#888; font-size:0.9em; margin-top:0;">
-        Tap a poll to expand it, then tap the option that means "I need a ride".
-        Tap the poll again to collapse it.
+        Tap a poll to expand it, then tap the option that means
+        "I need a ride". Tap again to collapse.
     </p>
-    <div id="passengerPollList" style="display:flex; flex-direction:column; gap:8px;">
+    <div id="passengerPollList"
+         style="display:flex; flex-direction:column; gap:8px;">
         <p style="color:#aaa;">Loading polls...</p>
     </div>
     <div id="passengerPreview" style="display:none; margin-top:12px;
@@ -74,7 +84,7 @@
     </div>
 </div>
 
-<!-- GENERATE -->
+<!-- GENERATE BUTTON -->
 <div style="margin-bottom:16px;">
     <button id="generateBtn" onclick="generateRoutes()"
             style="background:#2c3e50; color:white; padding:14px;
@@ -85,46 +95,78 @@
 </div>
 
 <!-- LOADING -->
-<div id="loadingSection" style="display:none; text-align:center; padding:30px;">
+<div id="loadingSection" style="display:none; text-align:center;
+     padding:30px;">
     <p style="font-size:1em; color:#555;">
-        ⏳ Calculating optimized routes...<br>this may take up to 30 seconds.
+        ⏳ Calculating optimized routes...<br>
+        this may take up to 30 seconds.
     </p>
 </div>
 
 <!-- RESULTS -->
 <div id="resultsSection" style="display:none;">
     <h2>📍 Results</h2>
+
+    <!-- RELEASE CONTROLS -->
+    <div style="background:#eafaf1; border:1px solid #27ae60;
+                padding:16px; border-radius:10px; margin-bottom:16px;">
+        <p style="margin:0 0 8px 0; font-weight:bold; color:#27ae60;">
+            Ready to share these routes?
+        </p>
+        <p style="margin:0 0 12px 0; color:#555; font-size:0.9em;">
+            Pressing <b>Release Routes</b> will show each driver and
+            passenger their assignment on their Dashboard, and send
+            a notification to everyone via ntfy.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button onclick="releaseRoutes()"
+                    style="background:#27ae60; color:white; padding:12px 20px;
+                           border:none; border-radius:6px; cursor:pointer;
+                           font-size:1em; flex:1;">
+                📢 Release Routes to Everyone
+            </button>
+            <button onclick="clearRoutes()"
+                    style="background:#aaa; color:white; padding:12px 20px;
+                           border:none; border-radius:6px; cursor:pointer;
+                           font-size:1em; flex:1;">
+                🗑️ Clear Released Routes
+            </button>
+        </div>
+        <div id="releaseStatus" style="margin-top:10px; display:none;"></div>
+    </div>
+
     <div id="morningResults" style="display:none;">
         <h3>🌅 Morning Routes (to destination)</h3>
         <div id="morningRouteCards"></div>
         <div id="morningUnassigned"></div>
         <div id="morningTotals"
              style="background:#f8f9fa; padding:12px;
-                    border-radius:8px; margin-top:10px;">
-        </div>
+                    border-radius:8px; margin-top:10px;"></div>
     </div>
+
     <div id="returnResults" style="display:none; margin-top:20px;">
         <h3>🌙 Return Routes (from destination)</h3>
         <div id="returnRouteCards"></div>
         <div id="returnUnassigned"></div>
         <div id="returnTotals"
              style="background:#f8f9fa; padding:12px;
-                    border-radius:8px; margin-top:10px;">
-        </div>
+                    border-radius:8px; margin-top:10px;"></div>
     </div>
 </div>
 
 <!-- ERROR -->
 <div id="errorBox" style="display:none; background:#fdecea;
      border:1px solid #e74c3c; padding:15px; border-radius:8px;
-     color:#c0392b; margin-top:10px;">
-</div>
+     color:#c0392b; margin-top:10px;"></div>
 
 
 <script>
 let allPolls               = [];
 let selectedDriverNames    = [];
 let selectedPassengerNames = [];
+let lastRouteData          = null;  // stores last generated result for release
+let lastDestination        = "";
+let lastMode               = "both";
 
 
 window.onload = async function() {
@@ -143,9 +185,6 @@ window.onload = async function() {
 };
 
 
-// ------------------------------------------------
-// POLL LIST
-// ------------------------------------------------
 function renderPollList(containerId, role) {
     let container = document.getElementById(containerId);
     container.innerHTML = "";
@@ -169,52 +208,51 @@ function renderPollList(containerId, role) {
                      "cursor:pointer; border:2px solid transparent;";
 
         let closedTag = poll.is_closed
-            ? " <span style='color:#e74c3c; font-size:0.8em;'>🔒 Closed</span>" : "";
+            ? " <span style='color:#e74c3c;font-size:0.8em;'>🔒 Closed</span>"
+            : "";
 
-        // Title and audience on separate lines — no crowding on mobile
-        card.innerHTML = `
-            <div style="font-weight:bold; word-break:break-word;">
-                ${poll.title}${closedTag}
-            </div>
-            <div style="color:#888; font-size:0.82em; margin-top:3px;">
-                ${targetLabel[poll.target] || poll.target}
-            </div>`;
+        card.innerHTML =
+            "<div style='font-weight:bold;word-break:break-word;'>" +
+            poll.title + closedTag + "</div>" +
+            "<div style='color:#888;font-size:0.82em;margin-top:3px;'>" +
+            (targetLabel[poll.target] || poll.target) + "</div>";
 
         let optionsPanel = document.createElement("div");
-        optionsPanel.style = "display:none; background:white; " +
-                             "border:2px solid #2c3e50; border-top:none; " +
-                             "border-radius:0 0 8px 8px; padding:12px; margin-bottom:4px;";
+        optionsPanel.style =
+            "display:none; background:white; border:2px solid #2c3e50; " +
+            "border-top:none; border-radius:0 0 8px 8px; " +
+            "padding:12px; margin-bottom:4px;";
         optionsPanel.dataset.open = "false";
 
-        let optionsHtml = "<p style='margin:0 0 10px 0; font-weight:bold;'>" +
-                          "Which option means the right group?</p>";
+        let optionsHtml =
+            "<p style='margin:0 0 10px 0;font-weight:bold;'>" +
+            "Which option means the right group?</p>";
         poll.options.forEach(function(opt) {
             let voters = poll.voters[opt] || [];
             let count  = poll.counts[opt] || 0;
-            optionsHtml += `
-                <div data-opt="${opt}" data-poll="${poll.id}"
-                     style="padding:10px; border:2px solid #ddd; border-radius:6px;
-                            margin-bottom:8px; cursor:pointer;">
-                    <div style="font-weight:bold; word-break:break-word;">
-                        ${opt}
-                    </div>
-                    <div style="color:#888; font-size:0.85em; margin-top:3px;">
-                        ${count} vote${count !== 1 ? "s" : ""}
-                        ${voters.length > 0 ? "· " + voters.join(", ") : "· No votes yet"}
-                    </div>
-                </div>`;
+            optionsHtml +=
+                "<div data-opt='" + opt + "' data-poll='" + poll.id + "' " +
+                "style='padding:10px;border:2px solid #ddd;border-radius:6px;" +
+                "margin-bottom:8px;cursor:pointer;'>" +
+                "<div style='font-weight:bold;word-break:break-word;'>" +
+                opt + "</div>" +
+                "<div style='color:#888;font-size:0.85em;margin-top:3px;'>" +
+                count + " vote" + (count !== 1 ? "s" : "") +
+                (voters.length > 0 ? " · " + voters.join(", ") : " · No votes yet") +
+                "</div></div>";
         });
         optionsPanel.innerHTML = optionsHtml;
 
         card.onclick = function() {
             let isOpen = optionsPanel.dataset.open === "true";
 
-            document.querySelectorAll(`#${containerId} [data-open='true']`)
+            document.querySelectorAll("#" + containerId + " [data-open='true']")
                     .forEach(function(el) {
                         el.style.display  = "none";
                         el.dataset.open   = "false";
                     });
-            document.querySelectorAll(`#${containerId} > div > div:first-child`)
+            document.querySelectorAll(
+                "#" + containerId + " > div > div:first-child")
                     .forEach(function(c) {
                         c.style.border       = "2px solid transparent";
                         c.style.borderRadius = "8px";
@@ -247,27 +285,34 @@ function renderPollList(containerId, role) {
                     c.style.border     = "2px solid #ddd";
                     c.style.background = "white";
                 });
-                optCard.style.border     = "2px solid " +
-                    (role === "driver" ? "#27ae60" : "#2980b9");
-                optCard.style.background = role === "driver" ? "#eafaf1" : "#eaf4fb";
+                optCard.style.border =
+                    "2px solid " + (role === "driver" ? "#27ae60" : "#2980b9");
+                optCard.style.background =
+                    role === "driver" ? "#eafaf1" : "#eaf4fb";
 
                 if (role === "driver") {
                     selectedDriverNames = voters;
                     if (voters.length > 0) {
-                        document.getElementById("driverPreviewNames").textContent =
+                        document.getElementById(
+                            "driverPreviewNames").textContent =
                             voters.join(", ");
-                        document.getElementById("driverPreview").style.display = "block";
+                        document.getElementById(
+                            "driverPreview").style.display = "block";
                     } else {
-                        document.getElementById("driverPreview").style.display = "none";
+                        document.getElementById(
+                            "driverPreview").style.display = "none";
                     }
                 } else {
                     selectedPassengerNames = voters;
                     if (voters.length > 0) {
-                        document.getElementById("passengerPreviewNames").textContent =
+                        document.getElementById(
+                            "passengerPreviewNames").textContent =
                             voters.join(", ");
-                        document.getElementById("passengerPreview").style.display = "block";
+                        document.getElementById(
+                            "passengerPreview").style.display = "block";
                     } else {
-                        document.getElementById("passengerPreview").style.display = "none";
+                        document.getElementById(
+                            "passengerPreview").style.display = "none";
                     }
                 }
             };
@@ -276,9 +321,6 @@ function renderPollList(containerId, role) {
 }
 
 
-// ------------------------------------------------
-// GENERATE ROUTES
-// ------------------------------------------------
 async function generateRoutes() {
     let churchAddress = document.getElementById("churchAddress").value.trim();
     let mode = document.querySelector("input[name='mode']:checked").value;
@@ -307,10 +349,17 @@ async function generateRoutes() {
             })
         });
         let data = await res.json();
+
         document.getElementById("loadingSection").style.display = "none";
         document.getElementById("generateBtn").disabled = false;
 
         if (data.error) { showError(data.error); return; }
+
+        // Store for potential release
+        lastRouteData   = data;
+        lastDestination = churchAddress;
+        lastMode        = mode;
+
         renderResults(data, mode);
     } catch(e) {
         document.getElementById("loadingSection").style.display = "none";
@@ -320,9 +369,74 @@ async function generateRoutes() {
 }
 
 
-// ------------------------------------------------
-// RENDER RESULTS
-// ------------------------------------------------
+async function releaseRoutes() {
+    if (!lastRouteData) {
+        showError("Please generate routes first before releasing.");
+        return;
+    }
+
+    let statusDiv = document.getElementById("releaseStatus");
+    statusDiv.style.display  = "block";
+    statusDiv.style.color    = "#555";
+    statusDiv.textContent    = "Releasing...";
+
+    try {
+        let res = await fetch("/admin/release_routes", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({
+                route_data:  lastRouteData,
+                destination: lastDestination,
+                direction:   lastMode
+            })
+        });
+        let data = await res.json();
+
+        if (data.status === "ok") {
+            statusDiv.style.color = "#27ae60";
+            statusDiv.textContent =
+                "✅ Routes released! Everyone can now see their " +
+                "assignments on their Dashboard. ntfy notification sent.";
+        } else {
+            statusDiv.style.color = "#e74c3c";
+            statusDiv.textContent = "❌ " + (data.error || "Release failed.");
+        }
+    } catch(e) {
+        statusDiv.style.color = "#e74c3c";
+        statusDiv.textContent = "❌ Something went wrong.";
+    }
+}
+
+
+async function clearRoutes() {
+    let statusDiv = document.getElementById("releaseStatus");
+    statusDiv.style.display  = "block";
+    statusDiv.style.color    = "#555";
+    statusDiv.textContent    = "Clearing...";
+
+    try {
+        let res  = await fetch("/admin/clear_routes", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({})
+        });
+        let data = await res.json();
+
+        if (data.status === "ok") {
+            statusDiv.style.color = "#27ae60";
+            statusDiv.textContent =
+                "✅ Routes cleared from all dashboards.";
+        } else {
+            statusDiv.style.color = "#e74c3c";
+            statusDiv.textContent = "❌ " + (data.error || "Clear failed.");
+        }
+    } catch(e) {
+        statusDiv.style.color = "#e74c3c";
+        statusDiv.textContent = "❌ Something went wrong.";
+    }
+}
+
+
 function renderResults(data, mode) {
     document.getElementById("resultsSection").style.display = "block";
 
@@ -330,7 +444,8 @@ function renderResults(data, mode) {
         document.getElementById("morningResults").style.display = "block";
         if (data.morning.error) {
             document.getElementById("morningRouteCards").innerHTML =
-                `<p style='color:red;'>${data.morning.error.join("<br>")}</p>`;
+                "<p style='color:red;'>" +
+                data.morning.error.join("<br>") + "</p>";
         } else {
             renderRouteCards("morningRouteCards", "morningUnassigned",
                              "morningTotals", data.morning, "pickup");
@@ -343,7 +458,8 @@ function renderResults(data, mode) {
         document.getElementById("returnResults").style.display = "block";
         if (data.return.error) {
             document.getElementById("returnRouteCards").innerHTML =
-                `<p style='color:red;'>${data.return.error.join("<br>")}</p>`;
+                "<p style='color:red;'>" +
+                data.return.error.join("<br>") + "</p>";
         } else {
             renderRouteCards("returnRouteCards", "returnUnassigned",
                              "returnTotals", data.return, "dropoff");
@@ -352,8 +468,10 @@ function renderResults(data, mode) {
         document.getElementById("returnResults").style.display = "none";
     }
 
-    document.getElementById("resultsSection").scrollIntoView({ behavior: "smooth" });
+    document.getElementById("resultsSection")
+            .scrollIntoView({ behavior: "smooth" });
 }
+
 
 function renderRouteCards(cardsId, unassignedId, totalsId, result, type) {
     let container = document.getElementById(cardsId);
@@ -361,55 +479,53 @@ function renderRouteCards(cardsId, unassignedId, totalsId, result, type) {
 
     result.routes.forEach(function(route) {
         let card = document.createElement("div");
-        card.style = "background:white; padding:15px; border-radius:10px; " +
-                     "margin-bottom:12px; border-left:4px solid #2c3e50;";
+        card.style =
+            "background:white; padding:15px; border-radius:10px; " +
+            "margin-bottom:12px; border-left:4px solid #2c3e50;";
 
         let stopsHtml = route.stops.length === 0
             ? "<p style='color:#aaa;'>No stops — driver goes directly.</p>"
             : route.stops.map(function(stop, j) {
                 let action = type === "pickup" ? "Pick up" : "Drop off";
-                return `<div style="padding:8px 0;
-                                    border-bottom:1px solid #f0f0f0;">
-                    <span style="color:#888; font-size:0.85em;">Stop ${j+1}</span><br>
-                    <b>${action}:</b> ${stop.passengers.join(", ")}<br>
-                    <span style="color:#555; font-size:0.9em;
-                                 word-break:break-word;">
-                        📍 ${stop.address}
-                    </span>
-                </div>`;
+                return "<div style='padding:8px 0;" +
+                       "border-bottom:1px solid #f0f0f0;'>" +
+                       "<span style='color:#888;font-size:0.85em;'>Stop " +
+                       (j + 1) + "</span><br>" +
+                       "<b>" + action + ":</b> " +
+                       stop.passengers.join(", ") + "<br>" +
+                       "<span style='color:#555;font-size:0.9em;" +
+                       "word-break:break-word;'>📍 " +
+                       stop.address + "</span></div>";
               }).join("");
 
-        card.innerHTML = `
-            <h4 style="margin:0 0 10px 0;">🚗 ${route.driver}</h4>
-            ${stopsHtml}
-            <div style="margin-top:10px; font-size:0.85em; color:#888;">
-                ⏱ ${route.time_min} min &nbsp;|&nbsp; 📏 ${route.distance_km} km
-            </div>`;
+        card.innerHTML =
+            "<h4 style='margin:0 0 10px 0;'>🚗 " + route.driver + "</h4>" +
+            stopsHtml +
+            "<div style='margin-top:10px;font-size:0.85em;color:#888;'>" +
+            "⏱ " + route.time_min + " min &nbsp;|&nbsp; " +
+            "📏 " + route.distance_km + " km</div>";
 
         container.appendChild(card);
     });
 
     let unassignedDiv = document.getElementById(unassignedId);
     if (result.unassigned && result.unassigned.length > 0) {
-        unassignedDiv.innerHTML = `
-            <div style="background:#fff3cd; border:1px solid #ffc107;
-                        padding:12px; border-radius:8px; margin-top:10px;">
-                ⚠️ <b>Could not assign:</b> ${result.unassigned.join(", ")}
-                — not enough driver capacity.
-            </div>`;
+        unassignedDiv.innerHTML =
+            "<div style='background:#fff3cd;border:1px solid #ffc107;" +
+            "padding:12px;border-radius:8px;margin-top:10px;'>" +
+            "⚠️ <b>Could not assign:</b> " +
+            result.unassigned.join(", ") +
+            " — not enough driver capacity.</div>";
     } else {
         unassignedDiv.innerHTML = "";
     }
 
     document.getElementById(totalsId).innerHTML =
-        `<b>Total:</b> ⏱ ${result.total_time_min} min &nbsp;|&nbsp;
-         📏 ${result.total_distance_km} km`;
+        "<b>Total:</b> ⏱ " + result.total_time_min +
+        " min &nbsp;|&nbsp; 📏 " + result.total_distance_km + " km";
 }
 
 
-// ------------------------------------------------
-// ERROR HELPERS
-// ------------------------------------------------
 function showError(msg) {
     let box = document.getElementById("errorBox");
     box.textContent   = "❌ " + msg;
@@ -421,9 +537,6 @@ function hideError() {
 }
 
 
-// ------------------------------------------------
-// AUTOCOMPLETE
-// ------------------------------------------------
 function setupAutocomplete(inputId, dropdownId) {
     let debounceTimer;
     let input    = document.getElementById(inputId);
@@ -435,12 +548,15 @@ function setupAutocomplete(inputId, dropdownId) {
         if (query.length < 3) { dropdown.style.display = "none"; return; }
 
         debounceTimer = setTimeout(function() {
-            fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q="
-                  + encodeURIComponent(query), { headers: { "Accept-Language": "en" } })
+            fetch("https://nominatim.openstreetmap.org/search" +
+                  "?format=json&limit=5&q=" + encodeURIComponent(query),
+                  { headers: { "Accept-Language": "en" } })
             .then(r => r.json())
             .then(function(results) {
                 dropdown.innerHTML = "";
-                if (!results.length) { dropdown.style.display = "none"; return; }
+                if (!results.length) {
+                    dropdown.style.display = "none"; return;
+                }
                 results.forEach(function(place) {
                     let item = document.createElement("div");
                     item.textContent = place.display_name;

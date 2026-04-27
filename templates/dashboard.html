@@ -2,21 +2,126 @@
 
 {% block content %}
 
-<h2>Welcome</h2>
+<h2>Welcome, {{ current_user.first_name }}!</h2>
 
 {% if incomplete %}
 <div style="background:#fff3cd; border:1px solid #ffc107; padding:15px;
-            border-radius:10px; margin-bottom:20px;">
+            border-radius:10px; margin-bottom:16px;">
     ⚠️ <b>Your profile is incomplete.</b>
     Please <a href="/profile">complete your profile</a>
     (address and phone number) before participating in polls.
 </div>
 {% endif %}
 
+<!-- DRIVER ASSIGNMENT -->
+{% if driver_info %}
+<div style="background:white; padding:20px; border-radius:10px;
+            margin-bottom:16px; border-left:4px solid #27ae60;">
+    <h3 style="margin-top:0; color:#27ae60;">
+        🚗 Your
+        {% if driver_info.direction == "morning" %}Morning{% else %}Return{% endif %}
+        Route
+    </h3>
+    <p style="margin:0 0 10px 0; color:#555;">
+        <b>Destination:</b> {{ driver_info.destination }}
+    </p>
+
+    {% if driver_info.passengers %}
+        <p style="font-weight:bold; margin-bottom:8px;">
+            Passengers to pick up:
+        </p>
+        {% for p in driver_info.passengers %}
+        <div style="background:#f8f9fa; padding:10px; border-radius:6px;
+                    margin-bottom:6px;">
+            <b>{{ p.name }}</b><br>
+            <span style="color:#555; font-size:0.9em;">📍 {{ p.address }}</span>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="color:#888;">No passengers — go directly to destination.</p>
+    {% endif %}
+
+    <div style="margin-top:10px; color:#888; font-size:0.85em;">
+        ⏱ {{ driver_info.time_min }} min &nbsp;|&nbsp;
+        📏 {{ driver_info.distance_km }} km
+    </div>
+
+    {% if driver_info.maps_url %}
+    <a href="{{ driver_info.maps_url }}" target="_blank"
+       style="display:block; margin-top:12px; background:#4285F4;
+              color:white; padding:12px; border-radius:6px;
+              text-align:center; text-decoration:none; font-weight:bold;">
+        🗺️ Open Route in Google Maps
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- PASSENGER ASSIGNMENT -->
+{% if passenger_info %}
+<div style="background:white; padding:20px; border-radius:10px;
+            margin-bottom:16px; border-left:4px solid #2980b9;">
+    <h3 style="margin-top:0; color:#2980b9;">
+        🧍 Your
+        {% if passenger_info.direction == "morning" %}Morning{% else %}Return{% endif %}
+        Pickup
+    </h3>
+    <p style="margin:0 0 8px 0;">
+        <b>Driver:</b> {{ passenger_info.driver }}
+    </p>
+    <p style="margin:0 0 8px 0;">
+        <b>Pickup address:</b> {{ passenger_info.address }}
+    </p>
+    <p style="margin:0; color:#555;">
+        <b>Destination:</b> {{ passenger_info.destination }}
+    </p>
+</div>
+{% endif %}
+
+<!-- NO ACTIVE ROUTES -->
+{% if not driver_info and not passenger_info and active_release %}
+<div style="background:white; padding:16px; border-radius:10px;
+            margin-bottom:16px; border-left:4px solid #aaa;">
+    <p style="margin:0; color:#888;">
+        Routes have been released but you are not assigned to any route
+        for this event.
+    </p>
+</div>
+{% endif %}
+
 <div class="card">
-    <p>Welcome to the app 👋</p>
-    <p>If you have questions, contact:</p>
-    <p><b>joashmathew816@gmail.com</b></p>
+    <p style="margin:0;">Welcome to Church App 👋</p>
+    <p style="margin:8px 0 0 0;">
+        If you have questions, contact
+        <b>joashmathew816@gmail.com</b>
+    </p>
+</div>
+
+<!-- NTFY SETUP REMINDER -->
+<div style="background:#eaf4fb; border:1px solid #2980b9; padding:15px;
+            border-radius:10px; margin-top:16px;">
+    <p style="margin:0 0 8px 0; font-weight:bold; color:#2980b9;">
+        📱 Get Notifications
+    </p>
+    <p style="margin:0; color:#555; font-size:0.9em;">
+        Install the <b>ntfy</b> app on your phone and subscribe to topic
+        <b style="color:#2c3e50;">{{ ntfy_topic }}</b>
+        to receive poll alerts and route notifications.
+    </p>
+    <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+        <a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy"
+           target="_blank"
+           style="background:#2c3e50; color:white; padding:8px 16px;
+                  border-radius:6px; text-decoration:none; font-size:0.9em;">
+            📲 Get ntfy on Android
+        </a>
+        <a href="https://apps.apple.com/app/ntfy/id1625396347"
+           target="_blank"
+           style="background:#2c3e50; color:white; padding:8px 16px;
+                  border-radius:6px; text-decoration:none; font-size:0.9em;">
+            📲 Get ntfy on iPhone
+        </a>
+    </div>
 </div>
 
 {% endblock %}

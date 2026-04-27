@@ -48,7 +48,6 @@ class Feedback(db.Model):
 
 class PushToken(db.Model):
     id      = db.Column(db.Integer, primary_key=True)
-    # unique=True here is fine — one token per user
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)
     token   = db.Column(db.Text)
     updated = db.Column(db.DateTime, default=datetime.utcnow)
@@ -57,6 +56,19 @@ class PushToken(db.Model):
 class PasswordResetRequest(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     user_id    = db.Column(db.Integer, db.ForeignKey('user.id'))
-    # Removed unique=True — users can request multiple times
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_handled = db.Column(db.Boolean, default=False)
+
+
+class RouteRelease(db.Model):
+    """
+    Stores a released route so drivers and passengers can see
+    their assignments on the dashboard.
+    """
+    id           = db.Column(db.Integer, primary_key=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by   = db.Column(db.Integer, db.ForeignKey('user.id'))
+    direction    = db.Column(db.String(10))   # "morning", "return", or "both"
+    destination  = db.Column(db.String(300))  # the destination address
+    route_data   = db.Column(db.Text)         # full JSON of route results
+    is_active    = db.Column(db.Boolean, default=True)
