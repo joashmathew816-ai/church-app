@@ -481,7 +481,8 @@ def dashboard():
                            feedback_unread=get_feedback_unread_count(),
                            driver_info=driver_info,
                            passenger_info=passenger_info,
-                           active_release=active_release)
+                           active_release=active_release,
+                           ntfy_topic=NTFY_TOPIC)
 
 
 # ----------------------
