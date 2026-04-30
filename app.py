@@ -416,29 +416,28 @@ def forgot_password():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    # Get the most recent active route release
-    active_release = RouteRelease.query.filter_by(
-        is_active=True).order_by(RouteRelease.created_at.desc()).first()
-
+    incomplete     = not profile_complete(current_user)
     driver_info    = None
     passenger_info = None
+    active_release = None
 
-    if active_release:
-        try:
+    try:
+        active_release = RouteRelease.query.filter_by(
+            is_active=True).order_by(
+            RouteRelease.created_at.desc()).first()
+
+        if active_release:
             route_data = json.loads(active_release.route_data)
             user_name  = (current_user.first_name + " " +
                           current_user.last_name)
 
-            # Look through morning and return routes
             for direction in ["morning", "return"]:
                 result = route_data.get(direction)
                 if not result or "routes" not in result:
                     continue
 
                 for route in result["routes"]:
-                    # Check if this user is the driver
                     if route["driver"] == user_name:
-                        stops        = [s["address"] for s in route["stops"]]
                         passengers_list = []
                         for stop in route["stops"]:
                             for pname in stop["passengers"]:
@@ -446,12 +445,9 @@ def dashboard():
                                     "name":    pname,
                                     "address": stop["address"]
                                 })
-
-                        # Build Google Maps URL
                         all_stops = [s["address"] for s in route["stops"]]
                         maps_url  = build_maps_url(
                             all_stops, active_release.destination)
-
                         driver_info = {
                             "direction":   direction,
                             "destination": active_release.destination,
@@ -461,7 +457,6 @@ def dashboard():
                             "maps_url":    maps_url
                         }
 
-                    # Check if this user is a passenger in any stop
                     for stop in route["stops"]:
                         for pname in stop["passengers"]:
                             if pname == user_name:
@@ -472,11 +467,15 @@ def dashboard():
                                     "address":     stop["address"],
                                 }
 
-        except Exception as e:
-            app.logger.error(f"Dashboard route parse error: {e}")
+    except Exception as e:
+        app.logger.error(f"Dashboard route parse error: {e}")
+        # Do not crash — just show dashboard without route info
+        active_release = None
+        driver_info    = None
+        passenger_info = None
 
     return render_template("dashboard.html",
-                           incomplete=not profile_complete(current_user),
+                           incomplete=incomplete,
                            unread_count=get_unread_count(),
                            feedback_unread=get_feedback_unread_count(),
                            driver_info=driver_info,
@@ -593,6 +592,29 @@ def save_push_token():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
+# ----------------------
+# TEST NTFY NOTIFICATION
+# ----------------------
+@app.route("/test_ntfy")
+@login_required
+def test_ntfy():
+    if current_user.role != "superuser":
+        return "Access denied", 403
+    try:
+        send_ntfy(
+            title    = "✅ Test Notification",
+            message  = "ntfy is working! Church App notifications are active.",
+            priority = "high",
+            tags     = ["white_check_mark"]
+        )
+        return (
+            "✅ ntfy notification sent!<br><br>"
+            "Check your ntfy app on your phone.<br>"
+            "If you see the notification, everything is working correctly.<br><br>"
+            f"Your ntfy topic is: <b>{NTFY_TOPIC}</b>"
+        )
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
 # ----------------------
 # POLLS
