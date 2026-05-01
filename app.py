@@ -115,40 +115,44 @@ def get_feedback_unread_count():
 # NTFY NOTIFICATIONS
 # ----------------------
 def send_ntfy(title, message, priority="default", tags=None):
-    """
-    Send a notification via ntfy.sh
-    """
+    """Send a notification via ntfy.sh — emoji safe version."""
     topic = os.environ.get("NTFY_TOPIC", "church-app-notifications")
     url   = f"https://ntfy.sh/{topic}"
-    
+
     try:
         import requests as req
-        
+
+        # ntfy headers must be ASCII — emojis go in the message body only
+        # Strip emojis from title for the header, keep them in body
+        safe_title = title.encode("ascii", "ignore").decode("ascii").strip()
+        if not safe_title:
+            safe_title = "Church App"
+
         headers = {
-            "Title":    title,
+            "Title":    safe_title,
             "Priority": priority,
-            "Content-Type": "text/plain; charset=utf-8",
         }
         if tags:
             headers["Tags"] = ",".join(tags)
 
+        # Emojis are fine in the body — send as UTF-8 bytes
+        full_message = f"{title}\n{message}" if title != safe_title else message
+
         response = req.post(
             url,
-            data=message.encode("utf-8"),
+            data=full_message.encode("utf-8"),
             headers=headers,
             timeout=15
         )
-        
+
         app.logger.info(
-            f"ntfy sent to {url}: status={response.status_code} "
-            f"title={title!r}"
+            f"ntfy sent: status={response.status_code} title={safe_title!r}"
         )
         return response.status_code == 200
-        
-    except Exception as e:
-        app.logger.error(f"ntfy error sending to {url}: {e}")
-        return False
 
+    except Exception as e:
+        app.logger.error(f"ntfy error: {e}")
+        return False
 
 def notify_new_poll(poll):
     """Notify everyone when a new poll is created."""
@@ -643,51 +647,40 @@ def debug_ntfy():
 def test_ntfy():
     if current_user.role != "superuser":
         return "Access denied", 403
-    
+
     topic = os.environ.get("NTFY_TOPIC", "NOT SET")
     url   = f"https://ntfy.sh/{topic}"
-    
+
     try:
         import requests as req
-        
+
         response = req.post(
             url,
-            data="Test notification from Church App!".encode("utf-8"),
+            data="Test notification from Church App! If you see this, notifications are working.".encode("utf-8"),
             headers={
-                "Title":    "✅ Church App Test",
+                "Title":    "Church App Test",
                 "Priority": "high",
                 "Tags":     "white_check_mark",
-                "Content-Type": "text/plain; charset=utf-8",
             },
             timeout=15
         )
-        
+
         if response.status_code == 200:
             return (
-                f"✅ <b>Notification sent successfully!</b><br><br>"
+                f"Notification sent successfully!<br><br>"
                 f"Topic: <b>{topic}</b><br>"
-                f"URL: {url}<br>"
                 f"Status: {response.status_code}<br><br>"
-                f"<b>Check your ntfy app now.</b><br>"
-                f"Make sure you are subscribed to topic: <b>{topic}</b><br><br>"
-                f"If you do not see it:<br>"
-                f"1. Open ntfy app → check topic is exactly: <b>{topic}</b><br>"
-                f"2. Check phone notification settings for ntfy<br>"
-                f"3. Enable 'Instant delivery in doze mode' in ntfy subscription settings<br>"
+                f"Check your ntfy app now.<br>"
+                f"You should see a notification titled: <b>Church App Test</b>"
             )
         else:
             return (
-                f"❌ ntfy returned status {response.status_code}<br>"
-                f"Response: {response.text}<br>"
-                f"URL tried: {url}<br>"
+                f"ntfy returned status {response.status_code}<br>"
+                f"Response: {response.text}"
             )
-            
+
     except Exception as e:
-        return (
-            f"❌ Error: {str(e)}<br>"
-            f"Topic: {topic}<br>"
-            f"URL: {url}<br>"
-        )
+        return f"Error: {str(e)}"
 
 # ----------------------
 # POLLS
