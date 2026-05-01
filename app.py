@@ -116,27 +116,38 @@ def get_feedback_unread_count():
 # ----------------------
 def send_ntfy(title, message, priority="default", tags=None):
     """
-    Send a notification via ntfy.sh.
-    Priority options: min, low, default, high, urgent
-    urgent = stays until acknowledged (perfect for polls and routes)
+    Send a notification via ntfy.sh
     """
+    topic = os.environ.get("NTFY_TOPIC", "church-app-notifications")
+    url   = f"https://ntfy.sh/{topic}"
+    
     try:
+        import requests as req
+        
         headers = {
             "Title":    title,
             "Priority": priority,
+            "Content-Type": "text/plain; charset=utf-8",
         }
         if tags:
             headers["Tags"] = ",".join(tags)
 
-        http_requests.post(
-            NTFY_URL,
+        response = req.post(
+            url,
             data=message.encode("utf-8"),
             headers=headers,
-            timeout=10
+            timeout=15
         )
-        app.logger.info(f"ntfy sent: {title}")
+        
+        app.logger.info(
+            f"ntfy sent to {url}: status={response.status_code} "
+            f"title={title!r}"
+        )
+        return response.status_code == 200
+        
     except Exception as e:
-        app.logger.error(f"ntfy error: {e}")
+        app.logger.error(f"ntfy error sending to {url}: {e}")
+        return False
 
 
 def notify_new_poll(poll):
@@ -592,6 +603,38 @@ def save_push_token():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
+@app.route("/debug_ntfy")
+@login_required
+def debug_ntfy():
+    if current_user.role != "superuser":
+        return "Access denied", 403
+    
+    topic = os.environ.get("NTFY_TOPIC", "NOT SET")
+    url   = f"https://ntfy.sh/{topic}"
+    
+    try:
+        import requests as req
+        response = req.post(
+            url,
+            data="Test from debug route".encode("utf-8"),
+            headers={
+                "Title":    "Debug Test",
+                "Priority": "high",
+            },
+            timeout=15
+        )
+        return (
+            f"Topic: {topic}<br>"
+            f"URL: {url}<br>"
+            f"Response status: {response.status_code}<br>"
+            f"Response text: {response.text}<br>"
+        )
+    except Exception as e:
+        return (
+            f"Topic: {topic}<br>"
+            f"URL: {url}<br>"
+            f"ERROR: {str(e)}<br>"
+        )
 # ----------------------
 # TEST NTFY NOTIFICATION
 # ----------------------
@@ -600,21 +643,51 @@ def save_push_token():
 def test_ntfy():
     if current_user.role != "superuser":
         return "Access denied", 403
+    
+    topic = os.environ.get("NTFY_TOPIC", "NOT SET")
+    url   = f"https://ntfy.sh/{topic}"
+    
     try:
-        send_ntfy(
-            title    = "✅ Test Notification",
-            message  = "ntfy is working! Church App notifications are active.",
-            priority = "high",
-            tags     = ["white_check_mark"]
+        import requests as req
+        
+        response = req.post(
+            url,
+            data="Test notification from Church App!".encode("utf-8"),
+            headers={
+                "Title":    "✅ Church App Test",
+                "Priority": "high",
+                "Tags":     "white_check_mark",
+                "Content-Type": "text/plain; charset=utf-8",
+            },
+            timeout=15
         )
-        return (
-            "✅ ntfy notification sent!<br><br>"
-            "Check your ntfy app on your phone.<br>"
-            "If you see the notification, everything is working correctly.<br><br>"
-            f"Your ntfy topic is: <b>{NTFY_TOPIC}</b>"
-        )
+        
+        if response.status_code == 200:
+            return (
+                f"✅ <b>Notification sent successfully!</b><br><br>"
+                f"Topic: <b>{topic}</b><br>"
+                f"URL: {url}<br>"
+                f"Status: {response.status_code}<br><br>"
+                f"<b>Check your ntfy app now.</b><br>"
+                f"Make sure you are subscribed to topic: <b>{topic}</b><br><br>"
+                f"If you do not see it:<br>"
+                f"1. Open ntfy app → check topic is exactly: <b>{topic}</b><br>"
+                f"2. Check phone notification settings for ntfy<br>"
+                f"3. Enable 'Instant delivery in doze mode' in ntfy subscription settings<br>"
+            )
+        else:
+            return (
+                f"❌ ntfy returned status {response.status_code}<br>"
+                f"Response: {response.text}<br>"
+                f"URL tried: {url}<br>"
+            )
+            
     except Exception as e:
-        return f"❌ Error: {str(e)}"
+        return (
+            f"❌ Error: {str(e)}<br>"
+            f"Topic: {topic}<br>"
+            f"URL: {url}<br>"
+        )
 
 # ----------------------
 # POLLS
