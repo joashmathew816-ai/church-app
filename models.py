@@ -61,14 +61,21 @@ class PasswordResetRequest(db.Model):
 
 
 class RouteRelease(db.Model):
+    id          = db.Column(db.Integer, primary_key=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by  = db.Column(db.Integer, db.ForeignKey('user.id'))
+    direction   = db.Column(db.String(10))
+    destination = db.Column(db.String(300))
+    route_data  = db.Column(db.Text)
+    is_active   = db.Column(db.Boolean, default=True)
+
+
+class RouteAcknowledgement(db.Model):
     """
-    Stores a released route so drivers and passengers can see
-    their assignments on the dashboard.
+    Tracks which users have acknowledged the current route release.
+    When a new release is created, all acknowledgements are cleared.
     """
-    id           = db.Column(db.Integer, primary_key=True)
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
-    created_by   = db.Column(db.Integer, db.ForeignKey('user.id'))
-    direction    = db.Column(db.String(10))   # "morning", "return", or "both"
-    destination  = db.Column(db.String(300))  # the destination address
-    route_data   = db.Column(db.Text)         # full JSON of route results
-    is_active    = db.Column(db.Boolean, default=True)
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'))
+    release_id = db.Column(db.Integer, db.ForeignKey('route_release.id'))
+    acked_at   = db.Column(db.DateTime, default=datetime.utcnow)

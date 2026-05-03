@@ -1,7 +1,7 @@
 from flask import Flask, make_response, render_template, request, redirect, jsonify, send_from_directory
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Poll, PollResponse, Feedback, PushToken, PasswordResetRequest, RouteRelease
+from models import db, User, Poll, PollResponse, Feedback, PushToken, PasswordResetRequest, RouteRelease, RouteAcknowledgement
 from optimizer import optimize_morning, optimize_return
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -122,21 +122,16 @@ def send_ntfy(title, message, priority="default", tags=None):
     try:
         import requests as req
 
-        # ntfy headers must be ASCII — emojis go in the message body only
-        # Strip emojis from title for the header, keep them in body
         safe_title = title.encode("ascii", "ignore").decode("ascii").strip()
         if not safe_title:
             safe_title = "Church App"
 
-        headers = {
-            "Title":    safe_title,
-            "Priority": priority,
-        }
+        headers = {"Title": safe_title, "Priority": priority}
         if tags:
             headers["Tags"] = ",".join(tags)
 
-        # Emojis are fine in the body — send as UTF-8 bytes
-        full_message = f"{title}\n{message}" if title != safe_title else message
+        full_message = (f"{title}\n{message}"
+                        if title != safe_title else message)
 
         response = req.post(
             url,
@@ -144,9 +139,9 @@ def send_ntfy(title, message, priority="default", tags=None):
             headers=headers,
             timeout=15
         )
-
         app.logger.info(
-            f"ntfy sent: status={response.status_code} title={safe_title!r}"
+            f"ntfy sent: status={response.status_code} "
+            f"title={safe_title!r}"
         )
         return response.status_code == 200
 
@@ -154,13 +149,14 @@ def send_ntfy(title, message, priority="default", tags=None):
         app.logger.error(f"ntfy error: {e}")
         return False
 
+
 def notify_new_poll(poll):
     """Notify everyone when a new poll is created."""
     try:
         send_ntfy(
-            title    = "📊 New Poll Available",
-            message  = f'"{poll.title}" is open for responses. '
-                       f'Open Church App to vote!',
+            title    = "New Poll Available",
+            message  = (f'"{poll.title}" is open for responses. '
+                        f'Open Church App to vote!'),
             priority = "high",
             tags     = ["ballot_box"]
         )
@@ -168,24 +164,126 @@ def notify_new_poll(poll):
         app.logger.error(f"notify_new_poll error: {e}")
 
 
-def notify_route_released(direction, destination):
-    """Notify everyone when routes are released."""
+def notify_route_released(active_release):
+    """
+    Send personalised route notifications to each assigned user.
+    Each person gets a message showing only their own assignment.
+    """
     try:
-        dir_label = {"morning": "Morning", "return": "Return",
-                     "both": "Morning & Return"}.get(direction, direction)
-        send_ntfy(
-            title    = "🚗 Routes Released",
-            message  = f'{dir_label} routes to {destination} have been '
-                       f'released. Open Church App to see your assignment!',
-            priority = "urgent",
-            tags     = ["car", "rotating_light"]
-        )
+        users = User.query.all()
+        for user in users:
+            msg = get_user_route_message(user, active_release)
+            if msg:
+                send_ntfy(
+                    title    = "Routes Released",
+                    message  = msg,
+                    priority = "urgent",
+                    tags     = ["car", "rotating_light"]
+                )
     except Exception as e:
         app.logger.error(f"notify_route_released error: {e}")
 
+def get_user_route_message(user, active_release):
+    """
+    Build a personalised route message for a specific user.
+    Returns None if the user has no assignment in this release.
+    """
+    if not active_release:
+        return None
+
+    try:
+        route_data = json.loads(active_release.route_data)
+        user_name  = user.first_name + " " + user.last_name
+
+        for direction in ["morning", "return"]:
+            result = route_data.get(direction)
+            if not result or "routes" not in result:
+                continue
+
+            dir_label = "Morning" if direction == "morning" else "Return"
+
+            for route in result["routes"]:
+                # Check if driver
+                if route["driver"] == user_name:
+                    if route["stops"]:
+                        passenger_lines = []
+                        for stop in route["stops"]:
+                            names = ", ".join(stop["passengers"])
+                            passenger_lines.append(
+                                f"{names} at {stop['address']}")
+                        stops_text = "\n".join(passenger_lines)
+                        return (
+                            f"{dir_label} route to "
+                            f"{active_release.destination}:\n"
+                            f"You are DRIVING.\n"
+                            f"Pick up:\n{stops_text}\n"
+                            f"Time: {route['time_min']} min | "
+                            f"{route['distance_km']} km\n"
+                            f"Open Church App to see your Google Maps link."
+                        )
+                    else:
+                        return (
+                            f"{dir_label} route to "
+                            f"{active_release.destination}:\n"
+                            f"You are DRIVING — go directly, no passengers."
+                        )
+
+                # Check if passenger
+                for stop in route["stops"]:
+                    if user_name in stop["passengers"]:
+                        return (
+                            f"{dir_label} route to "
+                            f"{active_release.destination}:\n"
+                            f"Your driver is {route['driver']}.\n"
+                            f"Pickup address: {stop['address']}\n"
+                            f"Open Church App to confirm."
+                        )
+
+    except Exception as e:
+        app.logger.error(f"get_user_route_message error: {e}")
+
+    return None
+
+def send_route_reminders():
+    """
+    Every 6 hours, re-notify users who have NOT acknowledged
+    the current active route release.
+    """
+    with app.app_context():
+        try:
+            active_release = RouteRelease.query.filter_by(
+                is_active=True).first()
+            if not active_release:
+                return
+
+            # Find who has already acknowledged
+            acked_user_ids = {
+                a.user_id for a in
+                RouteAcknowledgement.query.filter_by(
+                    release_id=active_release.id).all()
+            }
+
+            users = User.query.all()
+            for user in users:
+                if user.id in acked_user_ids:
+                    continue  # Already acknowledged — skip
+
+                msg = get_user_route_message(user, active_release)
+                if msg:
+                    send_ntfy(
+                        title    = "Route Reminder",
+                        message  = (msg + "\n\nPlease open Church App "
+                                    "and tap Acknowledge to confirm."),
+                        priority = "urgent",
+                        tags     = ["car", "bell"]
+                    )
+
+        except Exception as e:
+            app.logger.error(f"send_route_reminders error: {e}")
+
 
 def check_closing_notifications():
-    """Background task — send poll closing warnings."""
+    """Send 30-min and 5-min poll closing warnings."""
     with app.app_context():
         try:
             now   = now_utc_naive()
@@ -196,43 +294,37 @@ def check_closing_notifications():
                 mins_left = (poll.closes_at - now).total_seconds() / 60
                 if 28 <= mins_left <= 32:
                     send_ntfy(
-                        title    = "⏰ Poll Closing Soon",
-                        message  = f'"{poll.title}" closes in about '
-                                   f'30 minutes! Open Church App to vote.',
+                        title    = "Poll Closing Soon",
+                        message  = (f'"{poll.title}" closes in about '
+                                    f'30 minutes! Open Church App to vote.'),
                         priority = "high",
                         tags     = ["warning"]
                     )
                 elif 3 <= mins_left <= 7:
                     send_ntfy(
-                        title    = "🚨 Last Chance to Vote",
-                        message  = f'"{poll.title}" closes in about '
-                                   f'5 minutes!',
+                        title    = "Last Chance to Vote",
+                        message  = (f'"{poll.title}" closes in about '
+                                    f'5 minutes!'),
                         priority = "urgent",
                         tags     = ["rotating_light"]
                     )
         except Exception as e:
             app.logger.error(f"check_closing_notifications error: {e}")
 
-
 def check_poll_reminders():
-    """
-    Every 6 hours, send a reminder for any open polls
-    that the user has not responded to yet.
-    """
+    """Every 6 hours remind everyone about open polls."""
     with app.app_context():
         try:
             open_polls = [p for p in Poll.query.all()
                           if not poll_is_closed(p)]
             if not open_polls:
                 return
-
-            poll_titles = [f'"{p.title}"' for p in open_polls]
+            titles = [f'"{p.title}"' for p in open_polls]
             send_ntfy(
-                title    = "📊 Open Polls Reminder",
-                message  = f"You have {len(open_polls)} open poll(s) "
-                           f"waiting for your response: "
-                           f"{', '.join(poll_titles)}. "
-                           f"Open Church App to vote!",
+                title    = "Open Polls Reminder",
+                message  = (f"You have {len(open_polls)} open poll(s): "
+                            f"{', '.join(titles)}. "
+                            f"Open Church App to vote!"),
                 priority = "default",
                 tags     = ["reminder"]
             )
@@ -244,16 +336,15 @@ def start_scheduler():
     def run():
         reminder_counter = 0
         while True:
-            time.sleep(300)  # 5 minutes
+            time.sleep(300)           # tick every 5 minutes
             check_closing_notifications()
             reminder_counter += 1
-            # Every 72 cycles of 5 minutes = 6 hours
-            if reminder_counter >= 72:
+            if reminder_counter >= 72:   # 72 × 5 min = 6 hours
                 check_poll_reminders()
+                send_route_reminders()
                 reminder_counter = 0
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
-
 
 with app.app_context():
     start_scheduler()
@@ -435,6 +526,7 @@ def dashboard():
     driver_info    = None
     passenger_info = None
     active_release = None
+    acknowledged   = False
 
     try:
         active_release = RouteRelease.query.filter_by(
@@ -442,6 +534,13 @@ def dashboard():
             RouteRelease.created_at.desc()).first()
 
         if active_release:
+            # Check if this user has acknowledged
+            ack = RouteAcknowledgement.query.filter_by(
+                user_id    = current_user.id,
+                release_id = active_release.id
+            ).first()
+            acknowledged = ack is not None
+
             route_data = json.loads(active_release.route_data)
             user_name  = (current_user.first_name + " " +
                           current_user.last_name)
@@ -460,7 +559,8 @@ def dashboard():
                                     "name":    pname,
                                     "address": stop["address"]
                                 })
-                        all_stops = [s["address"] for s in route["stops"]]
+                        all_stops = [s["address"]
+                                     for s in route["stops"]]
                         maps_url  = build_maps_url(
                             all_stops, active_release.destination)
                         driver_info = {
@@ -483,11 +583,11 @@ def dashboard():
                                 }
 
     except Exception as e:
-        app.logger.error(f"Dashboard route parse error: {e}")
-        # Do not crash — just show dashboard without route info
+        app.logger.error(f"Dashboard error: {e}")
         active_release = None
         driver_info    = None
         passenger_info = None
+        acknowledged   = False
 
     return render_template("dashboard.html",
                            incomplete=incomplete,
@@ -496,6 +596,7 @@ def dashboard():
                            driver_info=driver_info,
                            passenger_info=passenger_info,
                            active_release=active_release,
+                           acknowledged=acknowledged,
                            ntfy_topic=NTFY_TOPIC)
 
 
@@ -1223,10 +1324,9 @@ def release_routes():
         return jsonify({"error": "Missing route data or destination"})
 
     try:
-        # Deactivate any previous releases
+        # Deactivate old releases
         RouteRelease.query.update({"is_active": False})
 
-        # Save the new release
         release = RouteRelease(
             created_by  = current_user.id,
             direction   = direction,
@@ -1237,8 +1337,8 @@ def release_routes():
         db.session.add(release)
         db.session.commit()
 
-        # Notify everyone via ntfy
-        notify_route_released(direction, destination)
+        # Send personalised notifications to each assigned user
+        notify_route_released(release)
 
         return jsonify({"status": "ok", "message": "Routes released!"})
     except Exception as e:
@@ -1263,7 +1363,35 @@ def clear_routes():
         db.session.rollback()
         return jsonify({"error": str(e)})
 
+# ----------------------
+# ACKNOWLEDGE ROUTE
+# ----------------------
+@app.route("/acknowledge_route", methods=["POST"])
+@login_required
+def acknowledge_route():
+    try:
+        active_release = RouteRelease.query.filter_by(
+            is_active=True).first()
+        if not active_release:
+            return jsonify({"status": "ok", "message": "No active release"})
 
+        existing = RouteAcknowledgement.query.filter_by(
+            user_id    = current_user.id,
+            release_id = active_release.id
+        ).first()
+
+        if not existing:
+            db.session.add(RouteAcknowledgement(
+                user_id    = current_user.id,
+                release_id = active_release.id
+            ))
+            db.session.commit()
+
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)})
+    
 # ----------------------
 # FEEDBACK
 # ----------------------
