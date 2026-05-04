@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sign Up</title>
+    <title>Sign Up — Church App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             font-family: Arial;
-            text-align: center;
-            margin-top: 60px;
             background: #f4f6f8;
+            padding: 20px;
+            box-sizing: border-box;
         }
         .card {
             background: white;
@@ -17,26 +17,43 @@
             padding: 30px;
             border-radius: 12px;
         }
+        h2 { margin-top: 0; color: #2c3e50; }
         label {
             display: block;
-            text-align: left;
-            margin-top: 14px;
-            margin-bottom: 4px;
             font-weight: bold;
             font-size: 0.9em;
+            margin-top: 14px;
+            margin-bottom: 3px;
         }
         input, select {
-            padding: 10px;
+            display: block;
             width: 100%;
-            box-sizing: border-box;
+            padding: 10px;
             border: 1px solid #ccc;
             border-radius: 6px;
-            font-size: 1em;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input.error-field { border-color: #e74c3c; }
+        .field-error {
+            color: #e74c3c;
+            font-size: 0.82em;
+            margin-top: 3px;
+            display: block;
+        }
+        .error-box {
+            background: #fdecea;
+            border: 1px solid #e74c3c;
+            color: #c0392b;
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 0.9em;
         }
         button {
             margin-top: 20px;
-            padding: 12px;
             width: 100%;
+            padding: 13px;
             background: #2c3e50;
             color: white;
             border: none;
@@ -44,7 +61,7 @@
             font-size: 1em;
             cursor: pointer;
         }
-        .autocomplete-wrapper { position: relative; text-align: left; }
+        .autocomplete-wrapper { position: relative; }
         .autocomplete-list {
             position: absolute;
             top: 100%; left: 0; right: 0;
@@ -55,90 +72,156 @@
             max-height: 200px;
             overflow-y: auto;
             z-index: 9999;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
         .autocomplete-list div {
             padding: 10px 12px;
             cursor: pointer;
             font-size: 0.9em;
-            text-align: left;
         }
         .autocomplete-list div:hover { background: #f0f4f8; }
-        .field-error {
-            color: #e74c3c;
-            font-size: 0.82em;
-            display: block;
-            text-align: left;
-            margin-top: 3px;
-        }
     </style>
 </head>
 <body>
 <div class="card">
-    <h2>Sign Up</h2>
+    <h2>Create Account</h2>
 
     {% if error %}
-        <p style="color:red; text-align:left;">{{ error }}</p>
+        <div class="error-box">{{ error }}</div>
     {% endif %}
 
-    <form method="POST" id="signupForm">
+    <form method="POST" id="signupForm" novalidate>
 
         <label>First Name</label>
-        <input name="first_name" required>
+        <input name="first_name" placeholder="e.g. John"
+               value="{{ request.form.get('first_name', '') }}"
+               required>
 
         <label>Last Name</label>
-        <input name="last_name" required>
+        <input name="last_name" placeholder="e.g. Smith"
+               value="{{ request.form.get('last_name', '') }}"
+               required>
 
         <label>Password</label>
-        <input type="password" name="password" required>
+        <input type="password" name="password" id="passwordInput"
+               placeholder="At least 6 characters" required
+               class="{{ 'error-field' if error_password else '' }}">
+        {% if error_password %}
+            <span class="field-error">{{ error_password }}</span>
+        {% else %}
+            <span class="field-error" id="passwordError"></span>
+        {% endif %}
 
         <label>Phone Number</label>
-        <input name="phone" placeholder="e.g. 519-555-1234" required>
+        <input name="phone" id="phoneInput"
+               placeholder="10 digits, e.g. 5191234567"
+               value="{{ request.form.get('phone', '') }}"
+               required
+               class="{{ 'error-field' if error_phone else '' }}">
+        {% if error_phone %}
+            <span class="field-error">{{ error_phone }}</span>
+        {% else %}
+            <span class="field-error" id="phoneError"></span>
+        {% endif %}
+        <small style="color:#888; font-size:0.8em;">
+            Numbers only, no dashes or spaces, exactly 10 digits.
+        </small>
 
-        <label>Address</label>
+        <label>Home Address</label>
         <div class="autocomplete-wrapper">
             <input name="address" id="addressInput"
                    placeholder="Start typing your address..."
+                   value="{{ request.form.get('address', '') }}"
                    required autocomplete="off">
-            <div class="autocomplete-list" id="addressDropdown" style="display:none;"></div>
+            <div class="autocomplete-list" id="addressDropdown"
+                 style="display:none;"></div>
         </div>
         <span class="field-error" id="addressError"></span>
-        <small style="color:#888; text-align:left; display:block; margin-top:2px;">
-            Must select from dropdown. If your exact address isn't listed,
-            pick the closest street or option.
+        <small style="color:#888; font-size:0.8em;">
+            Must select from dropdown. Pick closest option if not found.
         </small>
 
-        <label>I am a driver</label>
-        <select name="is_driver" id="driverSelect" onchange="toggleCapacity()">
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
+        <label>Are you a driver?</label>
+        <select name="is_driver" id="driverSelect"
+                onchange="toggleCapacity()">
+            <option value="no">No — I need a ride</option>
+            <option value="yes"
+                {% if request.form.get('is_driver') == 'yes' %}
+                    selected{% endif %}>
+                Yes — I can drive
+            </option>
         </select>
 
         <div id="capacityDiv" style="display:none; margin-top:10px;">
-            <label>Capacity (1–8)</label>
+            <label>
+                Passenger Capacity
+                <span style="font-weight:normal; color:#888;
+                             font-size:0.85em;">
+                    — excluding yourself
+                </span>
+            </label>
             <input type="number" name="capacity" id="capacityInput"
-                   min="1" max="8"
-                   placeholder="How many passengers can you carry?">
+                   min="1" max="8" placeholder="e.g. 4"
+                   value="{{ request.form.get('capacity', '') }}">
             {% if error_capacity %}
                 <span class="field-error">{{ error_capacity }}</span>
+            {% else %}
+                <span class="field-error" id="capacityError"></span>
             {% endif %}
-            <span class="field-error" id="capacityError"></span>
         </div>
 
         <button type="submit">Create Account</button>
+
     </form>
 
-    <p>Already have an account? <a href="/login">Login</a></p>
+    <p style="text-align:center; margin-top:16px; font-size:0.9em;">
+        Already have an account? <a href="/login">Log in</a>
+    </p>
 </div>
 
 <script>
 let addressConfirmed = false;
 
+// Pre-confirm if address was already filled
+{% if request.form.get('address') %}
+    addressConfirmed = true;
+{% endif %}
+
 function toggleCapacity() {
+    let show = document.getElementById("driverSelect").value === "yes";
     document.getElementById("capacityDiv").style.display =
-        document.getElementById("driverSelect").value === "yes" ? "block" : "none";
+        show ? "block" : "none";
 }
 
+// Run on load in case of form re-render
+window.onload = function() {
+    toggleCapacity();
+};
+
+// Phone — only allow digits, max 10
+let phoneInput = document.getElementById("phoneInput");
+phoneInput.addEventListener("input", function() {
+    // Strip any non-digit characters as they type
+    this.value = this.value.replace(/\D/g, "").slice(0, 10);
+    let err = document.getElementById("phoneError");
+    if (err) {
+        err.textContent = this.value.length > 0 && this.value.length < 10
+            ? "Phone must be exactly 10 digits."
+            : "";
+    }
+});
+
+// Password — live feedback
+let passwordInput = document.getElementById("passwordInput");
+passwordInput.addEventListener("input", function() {
+    let err = document.getElementById("passwordError");
+    if (err) {
+        err.textContent = this.value.length > 0 && this.value.length < 6
+            ? "Password must be at least 6 characters."
+            : "";
+    }
+});
+
+// Address autocomplete
 let debounceTimer;
 let addressInput    = document.getElementById("addressInput");
 let addressDropdown = document.getElementById("addressDropdown");
@@ -147,15 +230,21 @@ addressInput.addEventListener("input", function() {
     addressConfirmed = false;
     clearTimeout(debounceTimer);
     let query = this.value.trim();
-    if (query.length < 3) { addressDropdown.style.display = "none"; return; }
-
+    if (query.length < 3) {
+        addressDropdown.style.display = "none";
+        return;
+    }
     debounceTimer = setTimeout(function() {
-        fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q="
-              + encodeURIComponent(query), { headers: { "Accept-Language": "en" } })
+        fetch("https://nominatim.openstreetmap.org/search" +
+              "?format=json&limit=5&q=" + encodeURIComponent(query),
+              { headers: { "Accept-Language": "en" } })
         .then(r => r.json())
         .then(function(results) {
             addressDropdown.innerHTML = "";
-            if (!results.length) { addressDropdown.style.display = "none"; return; }
+            if (!results.length) {
+                addressDropdown.style.display = "none";
+                return;
+            }
             results.forEach(function(place) {
                 let item = document.createElement("div");
                 item.textContent = place.display_name;
@@ -163,14 +252,16 @@ addressInput.addEventListener("input", function() {
                     addressInput.value            = place.display_name;
                     addressDropdown.style.display = "none";
                     addressConfirmed              = true;
-                    addressInput.style.borderColor = "";
-                    document.getElementById("addressError").textContent = "";
+                    document.getElementById("addressError")
+                            .textContent = "";
                 };
                 addressDropdown.appendChild(item);
             });
             addressDropdown.style.display = "block";
         })
-        .catch(() => { addressDropdown.style.display = "none"; });
+        .catch(function() {
+            addressDropdown.style.display = "none";
+        });
     }, 400);
 });
 
@@ -179,24 +270,51 @@ document.addEventListener("click", function(e) {
         addressDropdown.style.display = "none";
 });
 
-document.getElementById("signupForm").addEventListener("submit", function(e) {
+// Form validation before submit
+document.getElementById("signupForm").addEventListener("submit",
+function(e) {
     let valid = true;
 
-    if (!addressConfirmed) {
-        document.getElementById("addressError").textContent =
-            "Please select your address from the dropdown. " +
-            "If your exact address isn't listed, pick the closest option.";
-        addressInput.style.borderColor = "#e74c3c";
+    // Password
+    let pw = document.getElementById("passwordInput").value;
+    if (pw.length < 6) {
+        let err = document.getElementById("passwordError");
+        if (err) err.textContent = "Password must be at least 6 characters.";
+        document.getElementById("passwordInput")
+                .classList.add("error-field");
         valid = false;
     }
 
-    if (document.getElementById("driverSelect").value === "yes") {
-        let capInput = document.getElementById("capacityInput");
-        let cap      = parseInt(capInput.value);
-        if (!capInput.value || cap < 1 || cap > 8) {
-            document.getElementById("capacityError").textContent =
+    // Phone
+    let phone = document.getElementById("phoneInput").value.replace(/\D/g, "");
+    if (phone.length !== 10) {
+        let err = document.getElementById("phoneError");
+        if (err) err.textContent = "Phone must be exactly 10 digits.";
+        document.getElementById("phoneInput")
+                .classList.add("error-field");
+        valid = false;
+    }
+
+    // Address
+    if (!addressConfirmed) {
+        document.getElementById("addressError").textContent =
+            "Please select your address from the dropdown.";
+        addressInput.classList.add("error-field");
+        valid = false;
+    }
+
+    // Capacity
+    let driverYes =
+        document.getElementById("driverSelect").value === "yes";
+    if (driverYes) {
+        let cap = parseInt(
+            document.getElementById("capacityInput").value);
+        if (!cap || cap < 1 || cap > 8) {
+            let err = document.getElementById("capacityError");
+            if (err) err.textContent =
                 "Capacity must be between 1 and 8.";
-            capInput.style.borderColor = "#e74c3c";
+            document.getElementById("capacityInput")
+                    .classList.add("error-field");
             valid = false;
         }
     }
@@ -204,5 +322,6 @@ document.getElementById("signupForm").addEventListener("submit", function(e) {
     if (!valid) e.preventDefault();
 });
 </script>
+
 </body>
 </html>

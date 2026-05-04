@@ -350,3 +350,16 @@ def optimize_return(drivers, passengers, church):
         "total_distance_km": round(total_distance / 1000, 2),
         "unassigned": unassigned
     }
+
+def safe_optimize(func, drivers, passengers, destination):
+    """
+    Safely run an optimizer function and always return a dict.
+    Never raises — always returns either results or an error dict.
+    """
+    try:
+        result = func(drivers, passengers, destination)
+        if result is None:
+            return {"error": ["Optimizer returned no result."]}
+        return result
+    except Exception as e:
+        return {"error": [f"Optimizer error: {str(e)}"]}

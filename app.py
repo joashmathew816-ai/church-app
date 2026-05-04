@@ -1368,48 +1368,60 @@ def generate_routes_api():
     if current_user.role not in ("admin", "superuser"):
         return jsonify({"error": "Access Denied"}), 403
 
-    data            = request.get_json()
-    driver_names    = data.get("driver_names", [])
-    passenger_names = data.get("passenger_names", [])
-    church_address  = data.get("church_address", "").strip()
-    mode            = data.get("mode", "both")
+    try:
+        data            = request.get_json(force=True)
+        driver_names    = data.get("driver_names", [])
+        passenger_names = data.get("passenger_names", [])
+        church_address  = data.get("church_address", "").strip()
+        mode            = data.get("mode", "both")
 
-    if not church_address:
-        return jsonify({"error": "Please enter the destination address"})
-    if not driver_names:
-        return jsonify({"error": "No drivers selected. Please pick a driver poll option."})
-    if not passenger_names:
-        return jsonify({"error": "No passengers selected. Please pick a passenger poll option."})
-
-    # Build driver objects — verify each is actually a driver
-    drivers        = []
-    non_drivers    = []
-    for name in driver_names:
-        u = User.query.filter_by(first_name=name).first()
-        if not u:
-            continue
-        if not u.is_driver:
-            non_drivers.append(name)
-            continue
-        if not u.address:
+        if not church_address:
             return jsonify({
-                "error": f"{name} does not have an address in their profile."})
-        if not u.capacity or u.capacity < 1:
+                "error": "Please enter the destination address."})
+        if not driver_names:
             return jsonify({
-                "error": f"{name} does not have a valid capacity set."})
-        drivers.append({
-            "name":         u.first_name + " " + u.last_name,
-            "address":      u.address,
-            "capacity":     u.capacity,
-            "morning":      True,
-            "is_returning": True
-        })
+                "error": "No drivers selected. Pick a driver poll option."})
+        if not passenger_names:
+            return jsonify({
+                "error": "No passengers selected. Pick a passenger poll option."})
 
-    # Build passenger objects — treat as passengers regardless of is_driver
-    passengers = []
-    for name in passenger_names:
-        u = User.query.filter_by(first_name=name).first()
-        if u and u.address:
+        # Build drivers — check each is actually a driver
+        drivers     = []
+        non_drivers = []
+        for name in driver_names:
+            u = User.query.filter_by(first_name=name).first()
+            if not u:
+                continue
+            if not u.is_driver:
+                non_drivers.append(f"{u.first_name} {u.last_name}")
+                continue
+            if not u.address:
+                return jsonify({
+                    "error": f"{u.first_name} {u.last_name} has no "
+                             f"address in their profile."})
+            if not u.capacity or u.capacity < 1:
+                return jsonify({
+                    "error": f"{u.first_name} {u.last_name} has no "
+                             f"passenger capacity set in their profile."})
+            drivers.append({
+                "name":         u.first_name + " " + u.last_name,
+                "address":      u.address,
+                "capacity":     u.capacity,
+                "morning":      True,
+                "is_returning": True
+            })
+
+        # Build passengers — treat as passengers regardless of is_driver
+        passengers = []
+        missing    = []
+        for name in passenger_names:
+            u = User.query.filter_by(first_name=name).first()
+            if not u:
+                missing.append(name)
+                continue
+            if not u.address:
+                missing.append(f"{name} (no address)")
+                continue
             passengers.append({
                 "name":         u.first_name + " " + u.last_name,
                 "address":      u.address,
@@ -1417,52 +1429,71 @@ def generate_routes_api():
                 "is_returning": True
             })
 
-    if not drivers:
-        msg = "None of the selected drivers are registered as drivers."
+        if not drivers:
+            msg = "None of the selected people are registered as drivers."
+            if non_drivers:
+                msg += (f" These are passengers, not drivers: "
+                        f"{', '.join(non_drivers)}.")
+            return jsonify({"error": msg})
+
+        if not passengers:
+            return jsonify({
+                "error": "None of the selected passengers have valid "
+                         "addresses in their profiles."})
+
+        warnings = []
         if non_drivers:
-            msg += (f" These people are passengers, not drivers: "
-                    f"{', '.join(non_drivers)}.")
-        return jsonify({"error": msg})
+            warnings.append(
+                f"Skipped — not registered as drivers: "
+                f"{', '.join(non_drivers)}")
+        if missing:
+            warnings.append(
+                f"Skipped — missing address: {', '.join(missing)}")
 
-    if not passengers:
-        return jsonify({
-            "error": "None of the selected passengers have valid addresses."})
-
-    warnings = []
-    if non_drivers:
-        warnings.append(
-            f"Note: {', '.join(non_drivers)} are not registered as "
-            f"drivers and were skipped.")
-
-    try:
+        # Run optimization — each direction independently
         response = {"warnings": warnings}
         errors   = []
 
         if mode in ("morning", "both"):
-            result = optimize_morning(drivers, passengers, church_address)
-            if "error" in result:
-                errors.append("Morning: " + "; ".join(result["error"]))
-            else:
-                response["morning"] = result
+            try:
+                from optimizer import safe_optimize, optimize_morning
+                result = safe_optimize(
+                    optimize_morning, drivers, passengers, church_address)
+                if "error" in result:
+                    errors.append(
+                        "Morning failed: " + "; ".join(result["error"]))
+                else:
+                    response["morning"] = result
+            except Exception as e:
+                errors.append(f"Morning failed: {str(e)}")
 
         if mode in ("return", "both"):
-            result = optimize_return(drivers, passengers, church_address)
-            if "error" in result:
-                errors.append("Return: " + "; ".join(result["error"]))
-            else:
-                response["return"] = result
+            try:
+                from optimizer import safe_optimize, optimize_return
+                result = safe_optimize(
+                    optimize_return, drivers, passengers, church_address)
+                if "error" in result:
+                    errors.append(
+                        "Return failed: " + "; ".join(result["error"]))
+                else:
+                    response["return"] = result
+            except Exception as e:
+                errors.append(f"Return failed: {str(e)}")
 
-        if errors and "morning" not in response and "return" not in response:
-            return jsonify({"error": " | ".join(errors)})
-
+        # Only return error if BOTH directions failed
         if errors:
-            response["partial_errors"] = errors
+            if "morning" not in response and "return" not in response:
+                return jsonify({"error": " | ".join(errors)})
+            else:
+                response["partial_errors"] = errors
 
         return jsonify(response)
 
     except Exception as e:
-        app.logger.error(f"generate_routes error: {e}")
-        return jsonify({"error": f"Route generation failed: {str(e)}"})
+        app.logger.error(f"generate_routes_api crash: {e}")
+        return jsonify({
+            "error": f"Server error: {str(e)}"
+        })
 
 
 # ----------------------
