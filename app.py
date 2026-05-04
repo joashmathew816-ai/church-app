@@ -140,9 +140,19 @@ def validate_password(password):
 def send_ntfy_to_user(user, title, message, priority="default", tags=None):
     """
     Send a notification to ONE specific user via their personal ntfy topic.
-    Only sends if the user has a ntfy_topic set (i.e. they have set it up).
+    Auto-assigns topic if missing.
     """
+    # Auto-assign topic if not set
     if not user.ntfy_topic:
+        try:
+            user.ntfy_topic = make_user_ntfy_topic(user)
+            db.session.commit()
+        except Exception:
+            pass
+
+    if not user.ntfy_topic:
+        app.logger.warning(
+            f"No ntfy topic for user {user.id} {user.first_name}")
         return False
 
     try:
@@ -150,25 +160,33 @@ def send_ntfy_to_user(user, title, message, priority="default", tags=None):
         if not safe_title:
             safe_title = "Church App"
 
-        headers = {"Title": safe_title, "Priority": priority}
+        headers = {
+            "Title":    safe_title,
+            "Priority": priority,
+        }
         if tags:
             headers["Tags"] = ",".join(tags)
 
+        # Put emoji title in body if it differs from safe_title
         full_message = (f"{title}\n{message}"
                         if title != safe_title else message)
 
         url      = f"{NTFY_SERVER}/{user.ntfy_topic}"
         response = http_requests.post(
             url,
-            data=full_message.encode("utf-8"),
-            headers=headers,
-            timeout=15
+            data    = full_message.encode("utf-8"),
+            headers = headers,
+            timeout = 15
+        )
+        app.logger.info(
+            f"ntfy → user {user.id} topic={user.ntfy_topic} "
+            f"status={response.status_code} title={safe_title!r}"
         )
         return response.status_code == 200
 
     except Exception as e:
         app.logger.error(
-            f"ntfy error for user {user.id} "
+            f"ntfy error user {user.id} "
             f"topic={user.ntfy_topic}: {e}"
         )
         return False
@@ -178,11 +196,18 @@ def notify_new_poll(poll):
     """Notify only eligible users when a new poll is created."""
     try:
         users = User.query.all()
+        sent  = 0
         for user in users:
             if not user_eligible_for_poll(user, poll):
                 continue
+
+            # Auto-assign topic if missing
             if not user.ntfy_topic:
-                continue
+                user.ntfy_topic = make_user_ntfy_topic(user)
+                try:
+                    db.session.commit()
+                except Exception:
+                    pass
 
             target_label = {
                 "everyone":   "everyone",
@@ -190,7 +215,7 @@ def notify_new_poll(poll):
                 "passengers": "passengers"
             }.get(poll.target, "everyone")
 
-            send_ntfy_to_user(
+            ok = send_ntfy_to_user(
                 user,
                 title    = "New Poll Available",
                 message  = (
@@ -200,6 +225,13 @@ def notify_new_poll(poll):
                 priority = "high",
                 tags     = ["ballot_box"]
             )
+            if ok:
+                sent += 1
+
+        app.logger.info(
+            f"Poll notification sent to {sent} eligible users "
+            f"for poll: {poll.title}"
+        )
     except Exception as e:
         app.logger.error(f"notify_new_poll error: {e}")
 
@@ -336,11 +368,12 @@ def send_route_reminders():
 
 
 def check_closing_notifications():
-    """Send 30-min and 5-min poll closing warnings to eligible users only."""
+    """Send 30-min and 5-min poll closing warnings to eligible users."""
     with app.app_context():
         try:
             now   = now_utc_naive()
             polls = Poll.query.filter(Poll.closes_at.isnot(None)).all()
+
             for poll in polls:
                 if poll_is_closed(poll):
                     continue
@@ -351,12 +384,18 @@ def check_closing_notifications():
 
                 users = User.query.all()
                 for user in users:
-                    if not user.ntfy_topic:
-                        continue
                     if not user_eligible_for_poll(user, poll):
                         continue
 
-                    # Only notify if they have not voted yet
+                    # Auto-assign topic
+                    if not user.ntfy_topic:
+                        user.ntfy_topic = make_user_ntfy_topic(user)
+                        try:
+                            db.session.commit()
+                        except Exception:
+                            pass
+
+                    # Only notify if not voted
                     voted = PollResponse.query.filter_by(
                         user_id = user.id,
                         poll_id = poll.id
@@ -389,13 +428,11 @@ def check_closing_notifications():
         except Exception as e:
             app.logger.error(f"check_closing_notifications error: {e}")
 
+            
+
 
 def check_poll_reminders():
-    """
-    Every 6 hours remind each eligible user about open polls
-    they have NOT voted in yet.
-    One notification per user, not one per poll.
-    """
+    """Every 6 hours remind each eligible user about open polls."""
     with app.app_context():
         try:
             all_polls  = Poll.query.all()
@@ -405,10 +442,14 @@ def check_poll_reminders():
 
             users = User.query.all()
             for user in users:
+                # Auto-assign topic if missing
                 if not user.ntfy_topic:
-                    continue
+                    user.ntfy_topic = make_user_ntfy_topic(user)
+                    try:
+                        db.session.commit()
+                    except Exception:
+                        pass
 
-                # Find polls this user is eligible for AND has not voted in
                 pending = []
                 for poll in open_polls:
                     if not user_eligible_for_poll(user, poll):
@@ -958,6 +999,32 @@ def polls():
                                unread_count=get_unread_count())
 
 
+@app.route("/assign_ntfy_topics")
+def assign_ntfy_topics():
+    """
+    One-time route — assigns personal ntfy topics to all users
+    who do not have one yet. Safe to run multiple times.
+    """
+    try:
+        users   = User.query.all()
+        updated = 0
+        for user in users:
+            if not user.ntfy_topic:
+                user.ntfy_topic = make_user_ntfy_topic(user)
+                updated += 1
+        db.session.commit()
+
+        # Show all users and their topics
+        lines = [f"Assigned topics to {updated} users.<br><br>"]
+        for user in User.query.order_by(User.id).all():
+            lines.append(
+                f"<b>{user.first_name} {user.last_name}</b> "
+                f"(role: {user.role}) → "
+                f"<code>{user.ntfy_topic}</code><br>"
+            )
+        return "".join(lines)
+    except Exception as e:
+        return f"Error: {str(e)}"
 # ----------------------
 # SUPERUSER: MANAGE USERS
 # ----------------------
@@ -1792,6 +1859,46 @@ def test_ntfy():
     except Exception as e:
         return f"Error: {str(e)}"
 
+@app.route("/test_poll_notify")
+@login_required
+def test_poll_notify():
+    if current_user.role != "superuser":
+        return "Access denied", 403
+
+    users  = User.query.all()
+    lines  = []
+
+    for user in users:
+        # Auto-assign if missing
+        if not user.ntfy_topic:
+            user.ntfy_topic = make_user_ntfy_topic(user)
+            try:
+                db.session.commit()
+            except Exception:
+                pass
+
+        ok = send_ntfy_to_user(
+            user,
+            title    = "Poll Test",
+            message  = (
+                f"Hi {user.first_name}! This is a test notification "
+                f"sent specifically to your account."
+            ),
+            priority = "high",
+            tags     = ["ballot_box"]
+        )
+        lines.append(
+            f"<b>{user.first_name} {user.last_name}</b> "
+            f"→ topic: <code>{user.ntfy_topic}</code> "
+            f"→ {'✅ sent' if ok else '❌ failed'}<br>"
+        )
+
+    return (
+        "<h3>Poll notification test results:</h3>" +
+        "".join(lines) +
+        "<br><b>Each user should receive a notification "
+        "on the ntfy topic shown above.</b>"
+    )
 
 @app.route("/test_poll_notification")
 @login_required
