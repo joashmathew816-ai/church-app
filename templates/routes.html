@@ -94,14 +94,29 @@
     </button>
 </div>
 
-<!-- LOADING -->
-<div id="loadingSection" style="display:none; text-align:center;
-     padding:30px;">
-    <p style="font-size:1em; color:#555;">
+<!-- LOADING + PROGRESS -->
+<div id="loadingSection" style="display:none; padding:20px 0;">
+    <p style="color:#555; text-align:center; margin-bottom:12px;">
         ⏳ Calculating optimized routes...<br>
-        this may take up to 30 seconds.
+        <span style="font-size:0.85em; color:#888;">
+            This may take up to 30 seconds.
+        </span>
     </p>
+    <div id="progressContainer"
+         style="background:#f0f0f0; border-radius:6px;
+                height:12px; overflow:hidden;">
+        <div id="progressBar"
+             style="height:100%; width:0%; background:#2c3e50;
+                    border-radius:6px;
+                    transition:width 0.5s ease;"></div>
+    </div>
 </div>
+
+<!-- WARNING BOX -->
+<div id="warningBox"
+     style="display:none; background:#fff3cd; border:1px solid #ffc107;
+            padding:12px; border-radius:8px; color:#856404;
+            margin-top:10px; white-space:pre-line;"></div>
 
 <!-- RESULTS -->
 <div id="resultsSection" style="display:none;">
@@ -114,9 +129,9 @@
             Ready to share these routes?
         </p>
         <p style="margin:0 0 12px 0; color:#555; font-size:0.9em;">
-            Pressing <b>Release Routes</b> will show each driver and
-            passenger their assignment on their Dashboard, and send
-            a notification to everyone via ntfy.
+            Pressing <b>Release Routes</b> will show each assigned driver
+            and passenger their assignment on their Dashboard, and send
+            a personalised notification to those who are in the route.
         </p>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <button onclick="releaseRoutes()"
@@ -337,6 +352,9 @@ async function generateRoutes() {
     document.getElementById("loadingSection").style.display = "block";
     document.getElementById("generateBtn").disabled = true;
 
+    // Start animated progress bar
+    startProgressBar();
+
     try {
         let res  = await fetch("/admin/generate_routes", {
             method:  "POST",
@@ -350,22 +368,88 @@ async function generateRoutes() {
         });
         let data = await res.json();
 
+        stopProgressBar(true);
         document.getElementById("loadingSection").style.display = "none";
         document.getElementById("generateBtn").disabled = false;
 
-        if (data.error) { showError(data.error); return; }
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
 
-        // Store for potential release
+        // Show any warnings
+        if (data.warnings && data.warnings.length > 0) {
+            showWarning(data.warnings.join("\n"));
+        }
+        if (data.partial_errors && data.partial_errors.length > 0) {
+            showWarning("Partial errors: " + data.partial_errors.join(" | "));
+        }
+
         lastRouteData   = data;
         lastDestination = churchAddress;
         lastMode        = mode;
 
         renderResults(data, mode);
+
     } catch(e) {
+        stopProgressBar(false);
         document.getElementById("loadingSection").style.display = "none";
         document.getElementById("generateBtn").disabled = false;
-        showError("Something went wrong. Please try again.");
+        showError("Request failed: " + e.message +
+                  ". Check your internet connection and try again.");
     }
+}
+
+let progressInterval = null;
+let progressValue    = 0;
+
+function startProgressBar() {
+    progressValue = 0;
+    let bar = document.getElementById("progressBar");
+    if (bar) {
+        bar.style.width = "0%";
+        document.getElementById("progressContainer").style.display = "block";
+    }
+
+    // Simulate progress — goes to 90% then waits
+    progressInterval = setInterval(function() {
+        if (progressValue < 90) {
+            // Faster at start, slower near end
+            let increment = progressValue < 30 ? 3
+                          : progressValue < 60 ? 2
+                          : progressValue < 80 ? 1
+                          : 0.3;
+            progressValue = Math.min(90, progressValue + increment);
+            if (bar) bar.style.width = progressValue + "%";
+        }
+    }, 500);
+}
+
+function stopProgressBar(success) {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+    let bar = document.getElementById("progressBar");
+    if (bar) {
+        bar.style.width = success ? "100%" : "0%";
+        bar.style.background = success ? "#27ae60" : "#e74c3c";
+        setTimeout(function() {
+            let container = document.getElementById("progressContainer");
+            if (container) container.style.display = "none";
+            if (bar) {
+                bar.style.width    = "0%";
+                bar.style.background = "#2c3e50";
+            }
+        }, 800);
+    }
+}
+
+function showWarning(msg) {
+    let box = document.getElementById("warningBox");
+    if (!box) return;
+    box.textContent   = "⚠️ " + msg;
+    box.style.display = "block";
 }
 
 
@@ -395,7 +479,7 @@ async function releaseRoutes() {
         if (data.status === "ok") {
             statusDiv.style.color = "#27ae60";
             statusDiv.textContent =
-                "✅ Routes released! Everyone can now see their " +
+                "✅ Routes released! Everyone eligible can now see their " +
                 "assignments on their Dashboard. ntfy notification sent.";
         } else {
             statusDiv.style.color = "#e74c3c";

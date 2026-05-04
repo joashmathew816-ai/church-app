@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>🗂️ Route History</h2>
+
+<p style="color:#555; font-size:0.9em;">
+    Manage all generated routes. Release past routes to show them on
+    user dashboards again, or permanently delete routes you no longer need.
+</p>
+
+{% if not history %}
+<div class="card">
+    <p style="color:#888;">No routes have been generated yet.</p>
+</div>
+{% endif %}
+
+{% for item in history %}
+<div style="background:white; border-radius:10px; margin-bottom:12px;
+            border:1px solid #ddd; overflow:hidden;"
+     id="route_{{ item.id }}">
+
+    <!-- HEADER — always visible, click to expand -->
+    <div onclick="toggleRoute({{ item.id }})"
+         style="padding:16px; cursor:pointer; display:flex;
+                justify-content:space-between; align-items:center;
+                flex-wrap:wrap; gap:8px;">
+
+        <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center;
+                        gap:8px; flex-wrap:wrap;">
+                <b style="word-break:break-word;">
+                    {{ item.destination }}
+                </b>
+                {% if item.is_visible %}
+                    <span style="background:#eafaf1; color:#27ae60;
+                                 padding:3px 10px; border-radius:12px;
+                                 font-size:0.8em; white-space:nowrap;">
+                        ● Live
+                    </span>
+                {% else %}
+                    <span style="background:#f0f0f0; color:#888;
+                                 padding:3px 10px; border-radius:12px;
+                                 font-size:0.8em; white-space:nowrap;">
+                        ○ Closed
+                    </span>
+                {% endif %}
+            </div>
+            <div style="color:#888; font-size:0.82em; margin-top:3px;">
+                {% if item.direction == "morning" %}🌅 Morning
+                {% elif item.direction == "return" %}🌙 Return
+                {% else %}🔄 Morning & Return{% endif %}
+                &nbsp;·&nbsp;
+                {% if item.released_at %}
+                    Last released: {{ item.released_at }}
+                {% else %}
+                    Created: {{ item.created_at }}
+                {% endif %}
+            </div>
+        </div>
+
+        <span id="arrow_{{ item.id }}"
+              style="color:#888; font-size:1.2em;">▼</span>
+    </div>
+
+    <!-- DETAIL — hidden by default -->
+    <div id="detail_{{ item.id }}" style="display:none;
+         border-top:1px solid #eee; padding:16px;">
+
+        <!-- Route details -->
+        <div id="routeContent_{{ item.id }}"></div>
+
+        <!-- Action buttons -->
+        <div style="display:flex; gap:10px; margin-top:16px;
+                    flex-wrap:wrap;">
+
+            {% if item.is_visible %}
+            <button onclick="toggleVisibility({{ item.id }}, false)"
+                    style="background:#e67e22; color:white; border:none;
+                           padding:10px 16px; border-radius:6px;
+                           cursor:pointer; flex:1;">
+                📴 Close Route (hide from dashboards)
+            </button>
+            {% else %}
+            <button onclick="toggleVisibility({{ item.id }}, true)"
+                    style="background:#27ae60; color:white; border:none;
+                           padding:10px 16px; border-radius:6px;
+                           cursor:pointer; flex:1;">
+                📢 Re-release (show on dashboards + notify)
+            </button>
+            {% endif %}
+
+            <button onclick="confirmDelete({{ item.id }})"
+                    style="background:#e74c3c; color:white; border:none;
+                           padding:10px 16px; border-radius:6px;
+                           cursor:pointer; flex:1;">
+                🗑️ Permanently Delete
+            </button>
+        </div>
+
+        <!-- Delete confirmation -->
+        <div id="deleteConfirm_{{ item.id }}"
+             style="display:none; margin-top:12px; background:#fdecea;
+                    border:1px solid #e74c3c; padding:12px;
+                    border-radius:8px;">
+            <p style="margin:0 0 10px 0; color:#c0392b; font-size:0.9em;">
+                Permanently delete this route? This cannot be undone.
+                All acknowledgements will also be removed.
+            </p>
+            <div style="display:flex; gap:8px;">
+                <button onclick="deleteRoute({{ item.id }})"
+                        style="background:#e74c3c; color:white; border:none;
+                               padding:8px 16px; border-radius:5px;
+                               cursor:pointer;">
+                    Yes, delete
+                </button>
+                <button onclick="cancelDelete({{ item.id }})"
+                        style="background:#aaa; color:white; border:none;
+                               padding:8px 16px; border-radius:5px;
+                               cursor:pointer;">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <div id="actionStatus_{{ item.id }}"
+             style="display:none; margin-top:10px; font-size:0.9em;"></div>
+    </div>
+
+</div>
+{% endfor %}
+
+
+<script>
+const ROUTE_DATA = {
+    {% for item in history %}
+    {{ item.id }}: {{ item.route_data | safe }},
+    {% endfor %}
+};
+
+function toggleRoute(id) {
+    let detail = document.getElementById("detail_" + id);
+    let arrow  = document.getElementById("arrow_" + id);
+    let isOpen = detail.style.display !== "none";
+
+    if (isOpen) {
+        detail.style.display = "none";
+        arrow.textContent    = "▼";
+    } else {
+        detail.style.display = "block";
+        arrow.textContent    = "▲";
+        renderRouteDetail(id);
+    }
+}
+
+function renderRouteDetail(id) {
+    let container = document.getElementById("routeContent_" + id);
+    let data      = ROUTE_DATA[id];
+    if (!data) { container.innerHTML = "<p>No route data.</p>"; return; }
+
+    let html = "";
+
+    for (let dir of ["morning", "return"]) {
+        let result = data[dir];
+        if (!result || !result.routes) continue;
+
+        let label = dir === "morning" ? "🌅 Morning" : "🌙 Return";
+        html += `<h4 style="margin:0 0 8px 0;">${label}</h4>`;
+
+        for (let route of result.routes) {
+            html += `<div style="background:#f8f9fa; padding:12px;
+                                 border-radius:8px; margin-bottom:8px;">
+                <b>🚗 ${route.driver}</b>`;
+
+            if (route.stops.length === 0) {
+                html += `<p style="color:#aaa; margin:4px 0 0 0;">
+                            Direct to destination.</p>`;
+            } else {
+                for (let stop of route.stops) {
+                    html += `<div style="margin-top:6px; font-size:0.9em;">
+                        <b>Pick up:</b> ${stop.passengers.join(", ")}<br>
+                        <span style="color:#555;">📍 ${stop.address}</span>
+                    </div>`;
+                }
+            }
+
+            html += `<div style="margin-top:6px; color:#888;
+                                  font-size:0.82em;">
+                ⏱ ${route.time_min} min | 📏 ${route.distance_km} km
+            </div></div>`;
+        }
+
+        if (result.unassigned && result.unassigned.length > 0) {
+            html += `<div style="background:#fff3cd; padding:8px;
+                                  border-radius:6px; font-size:0.85em;
+                                  margin-bottom:8px;">
+                ⚠️ Unassigned: ${result.unassigned.join(", ")}
+            </div>`;
+        }
+    }
+
+    container.innerHTML = html || "<p style='color:#888;'>No routes found in data.</p>";
+}
+
+async function toggleVisibility(id, makeVisible) {
+    let status = document.getElementById("actionStatus_" + id);
+    status.style.display = "block";
+    status.style.color   = "#555";
+    status.textContent   = makeVisible ? "Releasing..." : "Closing...";
+
+    try {
+        let res  = await fetch("/admin/toggle_route/" + id,
+                               { method: "POST" });
+        let data = await res.json();
+
+        if (data.status === "ok") {
+            status.style.color = "#27ae60";
+            status.textContent = makeVisible
+                ? "Released! Users notified and dashboards updated."
+                : "Route closed. No longer visible on dashboards.";
+            setTimeout(function() { window.location.reload(); }, 1500);
+        } else {
+            status.style.color = "#e74c3c";
+            status.textContent = "Error: " + (data.error || "Failed");
+        }
+    } catch(e) {
+        status.style.color = "#e74c3c";
+        status.textContent = "Error: " + e.message;
+    }
+}
+
+function confirmDelete(id) {
+    document.getElementById("deleteConfirm_" + id).style.display = "block";
+}
+
+function cancelDelete(id) {
+    document.getElementById("deleteConfirm_" + id).style.display = "none";
+}
+
+async function deleteRoute(id) {
+    let status = document.getElementById("actionStatus_" + id);
+    status.style.display = "block";
+    status.style.color   = "#555";
+    status.textContent   = "Deleting...";
+
+    try {
+        let res  = await fetch("/admin/delete_route/" + id,
+                               { method: "POST" });
+        let data = await res.json();
+
+        if (data.status === "ok") {
+            document.getElementById("route_" + id).remove();
+        } else {
+            status.style.color = "#e74c3c";
+            status.textContent = "Error: " + (data.error || "Failed");
+        }
+    } catch(e) {
+        status.style.color = "#e74c3c";
+        status.textContent = "Error: " + e.message;
+    }
+}
+</script>
+
+{% endblock %}

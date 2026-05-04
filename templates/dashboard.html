@@ -13,7 +13,13 @@
 </div>
 {% endif %}
 
-<!-- DRIVER ASSIGNMENT -->
+{% for assignment in user_assignments %}
+
+{% set release      = assignment.release %}
+{% set driver_info  = assignment.driver_info %}
+{% set pass_info    = assignment.passenger_info %}
+{% set acknowledged = assignment.acknowledged %}
+
 {% if driver_info %}
 <div style="background:white; padding:20px; border-radius:10px;
             margin-bottom:16px;
@@ -22,10 +28,12 @@
     <div style="display:flex; justify-content:space-between;
                 align-items:flex-start; flex-wrap:wrap; gap:8px;
                 margin-bottom:12px;">
-        <h3 style="margin:0; color:{% if acknowledged %}#aaa{% else %}#27ae60{% endif %};">
-            🚗 Your
-            {% if driver_info.direction == "morning" %}Morning{% else %}Return{% endif %}
-            Route
+        <h3 style="margin:0;
+                   color:{% if acknowledged %}#aaa{% else %}#27ae60{% endif %};">
+            🚗
+            {% if driver_info.direction == "morning" %}Morning
+            {% else %}Return{% endif %}
+            Route — You are Driving
         </h3>
         {% if acknowledged %}
             <span style="background:#eee; color:#888; padding:4px 12px;
@@ -40,7 +48,7 @@
     </p>
 
     {% if driver_info.passengers %}
-        <p style="font-weight:bold; margin-bottom:8px;">
+        <p style="font-weight:bold; margin:0 0 8px 0;">
             Passengers to pick up:
         </p>
         {% for p in driver_info.passengers %}
@@ -53,13 +61,14 @@
         </div>
         {% endfor %}
     {% else %}
-        <p style="color:#888;">
+        <p style="color:#888; margin:0 0 10px 0;">
             No passengers — go directly to destination.
         </p>
     {% endif %}
 
     <div style="margin-top:10px; color:#888; font-size:0.85em;">
-        ⏱ {{ driver_info.time_min }} min &nbsp;|&nbsp;
+        ⏱ {{ driver_info.time_min }} min
+        &nbsp;|&nbsp;
         📏 {{ driver_info.distance_km }} km
     </div>
 
@@ -74,31 +83,33 @@
     {% endif %}
 
     {% if not acknowledged %}
-    <button onclick="acknowledgeRoute()"
-            id="ackBtn"
+    <button onclick="acknowledgeRoute({{ release.id }})"
+            id="ackBtn_{{ release.id }}"
             style="margin-top:10px; width:100%; background:#27ae60;
                    color:white; border:none; padding:12px;
                    border-radius:6px; font-size:1em; cursor:pointer;">
         ✅ Acknowledge — I have seen my route
     </button>
     {% endif %}
+
 </div>
 {% endif %}
 
-
-<!-- PASSENGER ASSIGNMENT -->
-{% if passenger_info %}
+{% if pass_info %}
 <div style="background:white; padding:20px; border-radius:10px;
             margin-bottom:16px;
-            border-left:4px solid {% if acknowledged %}#aaa{% else %}#2980b9{% endif %};">
+            border-left:4px solid
+            {% if acknowledged %}#aaa{% else %}#2980b9{% endif %};">
 
     <div style="display:flex; justify-content:space-between;
                 align-items:flex-start; flex-wrap:wrap; gap:8px;
                 margin-bottom:12px;">
-        <h3 style="margin:0; color:{% if acknowledged %}#aaa{% else %}#2980b9{% endif %};">
-            🧍 Your
-            {% if passenger_info.direction == "morning" %}Morning{% else %}Return{% endif %}
-            Pickup
+        <h3 style="margin:0;
+                   color:{% if acknowledged %}#aaa{% else %}#2980b9{% endif %};">
+            🧍
+            {% if pass_info.direction == "morning" %}Morning
+            {% else %}Return{% endif %}
+            Pickup — You are a Passenger
         </h3>
         {% if acknowledged %}
             <span style="background:#eee; color:#888; padding:4px 12px;
@@ -109,60 +120,61 @@
     </div>
 
     <p style="margin:0 0 8px 0;">
-        <b>Your driver:</b> {{ passenger_info.driver }}
+        <b>Your driver:</b> {{ pass_info.driver }}
     </p>
     <p style="margin:0 0 8px 0;">
-        <b>Pickup address:</b> {{ passenger_info.address }}
+        <b>Your pickup address:</b> {{ pass_info.address }}
     </p>
     <p style="margin:0; color:#555;">
-        <b>Destination:</b> {{ passenger_info.destination }}
+        <b>Destination:</b> {{ pass_info.destination }}
     </p>
 
     {% if not acknowledged %}
-    <button onclick="acknowledgeRoute()"
-            id="ackBtn"
+    <button onclick="acknowledgeRoute({{ release.id }})"
+            id="ackBtn_{{ release.id }}"
             style="margin-top:12px; width:100%; background:#2980b9;
                    color:white; border:none; padding:12px;
                    border-radius:6px; font-size:1em; cursor:pointer;">
         ✅ Acknowledge — I have seen my pickup info
     </button>
     {% endif %}
+
 </div>
 {% endif %}
 
+{% endfor %}
 
-<!-- NO ASSIGNMENT (but routes are active) -->
-{% if active_release and not driver_info and not passenger_info %}
-<div style="background:white; padding:16px; border-radius:10px;
-            margin-bottom:16px; border-left:4px solid #aaa;">
-    <p style="margin:0; color:#888;">
-        Routes have been released for this event but you do not
-        have an assignment.
-    </p>
-</div>
-{% endif %}
-
-
-<!-- WELCOME CARD -->
+{% if not user_assignments %}
 <div class="card">
     <p style="margin:0 0 6px 0;">Welcome to Church App 👋</p>
     <p style="margin:0; color:#888; font-size:0.9em;">
-        If you have questions contact
-        <b>joashmathew816@gmail.com</b>
+        No active route assignments right now.
+        Check back after the admin releases routes for the next event.
     </p>
 </div>
+{% endif %}
 
-
-<!-- NTFY SETUP -->
+<!-- NTFY SETUP CARD -->
 <div style="background:#eaf4fb; border:1px solid #2980b9;
             padding:15px; border-radius:10px; margin-top:16px;">
     <p style="margin:0 0 6px 0; font-weight:bold; color:#2980b9;">
         📱 Get Notifications
     </p>
-    <p style="margin:0 0 10px 0; color:#555; font-size:0.9em;">
-        Install <b>ntfy</b> and subscribe to topic
-        <b style="color:#2c3e50;">{{ ntfy_topic }}</b>
-        to receive poll and route alerts.
+    <p style="margin:0 0 6px 0; color:#555; font-size:0.9em;">
+        Install <b>ntfy</b> and subscribe to
+        <b>your personal topic</b> below to receive
+        notifications meant only for you.
+    </p>
+    <div style="background:#2c3e50; color:white; padding:10px 14px;
+                border-radius:6px; font-family:monospace;
+                font-size:0.95em; word-break:break-all;
+                margin-bottom:10px;">
+        {{ ntfy_topic }}
+    </div>
+    <p style="margin:0 0 10px 0; color:#888; font-size:0.82em;">
+        This topic is unique to your account.
+        Do not share it with others.
+        You must save your profile at least once before subscribing.
     </p>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy"
@@ -183,23 +195,20 @@
 </div>
 
 <script>
-async function acknowledgeRoute() {
-    let btn = document.getElementById("ackBtn");
+async function acknowledgeRoute(releaseId) {
+    let btn = document.getElementById("ackBtn_" + releaseId);
     if (btn) {
         btn.disabled    = true;
         btn.textContent = "Saving...";
     }
-
     try {
         let res  = await fetch("/acknowledge_route", {
             method:  "POST",
             headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({})
+            body:    JSON.stringify({ release_id: releaseId })
         });
         let data = await res.json();
-
         if (data.status === "ok") {
-            // Reload the page to show the acknowledged state
             window.location.reload();
         } else {
             if (btn) {
