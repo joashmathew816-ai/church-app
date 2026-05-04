@@ -1829,37 +1829,39 @@ def setup():
 
 @app.route("/migrate")
 def migrate():
+    results = []
     try:
         db.create_all()
-        results = ["All tables created/verified"]
-
-        with db.engine.connect() as conn:
-            for table, column, col_type in [
-                ("poll",  "closes_at", "TIMESTAMP NULL"),
-                ("user",  "ntfy_topic", "VARCHAR(100)"),
-                ("route_release", "released_at", "TIMESTAMP NULL"),
-                ("route_release", "is_visible",
-                 "BOOLEAN DEFAULT FALSE"),
-            ]:
-                try:
-                    conn.execute(db.text(
-                        f"ALTER TABLE {table} "
-                        f"ADD COLUMN {column} {col_type}"
-                    ))
-                    conn.commit()
-                    results.append(f"Added {column} to {table}")
-                except Exception as e:
-                    err = str(e).lower()
-                    if "already exists" in err or "duplicate" in err:
-                        results.append(
-                            f"{table}.{column} already exists")
-                    else:
-                        results.append(
-                            f"Error {table}.{column}: {str(e)}")
-
-        return "<br>".join(results)
+        results.append("All tables created/verified")
     except Exception as e:
-        return f"Error: {str(e)}"
+        results.append(f"create_all error: {str(e)}")
+
+    migrations = [
+        # table name,      quoted for SQL,          column,        type
+        ("poll",           "poll",                  "closes_at",   "TIMESTAMP NULL"),
+        ("user",           '"user"',                "ntfy_topic",  "VARCHAR(100)"),
+        ("route_release",  "route_release",         "released_at", "TIMESTAMP NULL"),
+        ("route_release",  "route_release",         "is_visible",  "BOOLEAN DEFAULT FALSE"),
+    ]
+
+    for table_name, sql_table, column, col_type in migrations:
+        # Each migration gets its own connection and transaction
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(db.text(
+                    f'ALTER TABLE {sql_table} '
+                    f'ADD COLUMN {column} {col_type}'
+                ))
+                conn.commit()
+                results.append(f"Added {column} to {table_name}")
+        except Exception as e:
+            err = str(e).lower()
+            if "already exists" in err or "duplicate" in err:
+                results.append(f"{table_name}.{column} already exists")
+            else:
+                results.append(f"Error {table_name}.{column}: {str(e)}")
+
+    return "<br>".join(results)
 
 
 # ----------------------
