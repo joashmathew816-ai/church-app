@@ -1696,17 +1696,33 @@ def toggle_route(release_id):
         return jsonify({"error": "Release not found"}), 404
 
     release.is_visible = not release.is_visible
+
     if release.is_visible:
+        # Re-releasing — clear all previous acknowledgements
+        # so everyone must acknowledge again and gets re-notified
+        deleted = RouteAcknowledgement.query.filter_by(
+            release_id=release_id).delete()
         release.released_at = now_utc_naive()
         db.session.commit()
-        notify_route_released(release)
-    else:
-        db.session.commit()
 
-    return jsonify({
-        "status":     "ok",
-        "is_visible": release.is_visible
-    })
+        # Notify all assigned users again
+        notify_route_released(release)
+
+        return jsonify({
+            "status":     "ok",
+            "is_visible": True,
+            "message":    f"Route re-released. {deleted} acknowledgements "
+                          f"cleared. Assigned users notified."
+        })
+
+    else:
+        # Closing — just hide it, keep acknowledgements intact
+        db.session.commit()
+        return jsonify({
+            "status":     "ok",
+            "is_visible": False,
+            "message":    "Route closed and hidden from dashboards."
+        })
 
 
 # ----------------------
@@ -1719,13 +1735,18 @@ def delete_route(release_id):
         return jsonify({"error": "Access Denied"}), 403
 
     release = db.session.get(RouteRelease, release_id)
-    if release:
+    if not release:
+        return jsonify({"error": "Release not found"}), 404
+
+    try:
         RouteAcknowledgement.query.filter_by(
             release_id=release_id).delete()
         db.session.delete(release)
         db.session.commit()
-
-    return jsonify({"status": "ok"})
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)})
 
 
 # ----------------------
