@@ -664,21 +664,17 @@ def forgot_password():
 @login_required
 def dashboard():
     incomplete       = not profile_complete(current_user)
-    visible_releases = []
-    user_assignments = []  # list of {release, driver_info, passenger_info, acknowledged}
+    user_assignments = []
 
     try:
         visible_releases = RouteRelease.query.filter_by(
             is_visible=True).order_by(
             RouteRelease.released_at.desc()).all()
 
-        user_name = (current_user.first_name + " " +
-                     current_user.last_name)
+        user_name = (current_user.first_name + " "
+                     + current_user.last_name)
 
         for release in visible_releases:
-            driver_info    = None
-            passenger_info = None
-
             ack = RouteAcknowledgement.query.filter_by(
                 user_id    = current_user.id,
                 release_id = release.id
@@ -687,54 +683,98 @@ def dashboard():
 
             try:
                 route_data = json.loads(release.route_data)
+            except Exception:
+                continue
 
-                for direction in ["morning", "return"]:
-                    result = route_data.get(direction)
-                    if not result or "routes" not in result:
-                        continue
+            # Collect all assignments for this release
+            # There can be morning driver, return driver,
+            # morning passenger, return passenger — show all
+            segments = []
 
-                    for route in result["routes"]:
-                        if route["driver"] == user_name:
-                            passengers_list = []
-                            for stop in route["stops"]:
-                                for pname in stop["passengers"]:
-                                    passengers_list.append({
-                                        "name":    pname,
-                                        "address": stop["address"]
-                                    })
-                            all_stops = [s["address"]
-                                         for s in route["stops"]]
-                            maps_url  = build_maps_url(
-                                all_stops, release.destination)
-                            driver_info = {
-                                "direction":   direction,
-                                "destination": release.destination,
-                                "passengers":  passengers_list,
-                                "time_min":    route["time_min"],
-                                "distance_km": route["distance_km"],
-                                "maps_url":    maps_url
-                            }
+            for direction in ["morning", "return"]:
+                result = route_data.get(direction)
+                if not result or "routes" not in result:
+                    continue
+
+                for route in result["routes"]:
+
+                    # --- DRIVER ---
+                    if route["driver"] == user_name:
+                        passengers_list = []
+                        stop_addresses  = []
 
                         for stop in route["stops"]:
+                            stop_addresses.append(stop["address"])
                             for pname in stop["passengers"]:
-                                if pname == user_name:
-                                    passenger_info = {
-                                        "direction":   direction,
-                                        "destination": release.destination,
-                                        "driver":      route["driver"],
-                                        "address":     stop["address"],
-                                    }
+                                passengers_list.append({
+                                    "name":    pname,
+                                    "address": stop["address"]
+                                })
 
-            except Exception as e:
-                app.logger.error(
-                    f"Dashboard release parse error: {e}")
+                        if direction == "morning":
+                            # Morning: driver starts at home,
+                            # picks up passengers, ends at church
+                            maps_url = build_maps_url(
+                                stop_addresses,
+                                release.destination
+                            )
+                            dest_label = release.destination
+                        else:
+                            # Return: driver starts at church,
+                            # drops off passengers, ends at home
+                            # Start = church, waypoints = passenger
+                            # stops, end = driver home
+                            driver_obj = next(
+                                (d for d in route.get("_drivers", [])
+                                 if d.get("name") == user_name),
+                                None
+                            )
+                            u = User.query.filter_by(
+                                first_name=current_user.first_name
+                            ).first()
+                            driver_home = u.address if u else ""
 
-            # Only add to user's view if they have an assignment
-            if driver_info or passenger_info:
+                            all_stops = (
+                                [release.destination]
+                                + stop_addresses
+                                + ([driver_home] if driver_home else [])
+                            )
+                            maps_url = build_maps_url(
+                                all_stops[:-1],
+                                all_stops[-1]
+                            )
+                            dest_label = "Your home"
+
+                        segments.append({
+                            "type":        "driver",
+                            "direction":   direction,
+                            "destination": dest_label,
+                            "passengers":  passengers_list,
+                            "time_min":    route["time_min"],
+                            "distance_km": route["distance_km"],
+                            "maps_url":    maps_url
+                        })
+
+                    # --- PASSENGER ---
+                    for stop in route["stops"]:
+                        if user_name in stop["passengers"]:
+                            if direction == "morning":
+                                dest_label = release.destination
+                            else:
+                                dest_label = "Your home"
+
+                            segments.append({
+                                "type":        "passenger",
+                                "direction":   direction,
+                                "destination": dest_label,
+                                "driver":      route["driver"],
+                                "address":     stop["address"]
+                            })
+
+            if segments:
                 user_assignments.append({
                     "release":      release,
-                    "driver_info":  driver_info,
-                    "passenger_info": passenger_info,
+                    "segments":     segments,
                     "acknowledged": acknowledged
                 })
 
@@ -744,12 +784,11 @@ def dashboard():
     ntfy_topic = make_user_ntfy_topic(current_user)
 
     return render_template("dashboard.html",
-                           incomplete=incomplete,
-                           unread_count=get_unread_count(),
-                           feedback_unread=get_feedback_unread_count(),
-                           user_assignments=user_assignments,
-                           ntfy_topic=ntfy_topic)
-
+                           incomplete        = incomplete,
+                           unread_count      = get_unread_count(),
+                           feedback_unread   = get_feedback_unread_count(),
+                           user_assignments  = user_assignments,
+                           ntfy_topic        = ntfy_topic)
 
 # ----------------------
 # PROFILE
@@ -2026,13 +2065,39 @@ def migrate():
 # ----------------------
 # GOOGLE MAPS HELPER
 # ----------------------
-def build_maps_url(stops, destination):
-    if not stops:
+def build_maps_url(stops, final_destination):
+    """
+    Build a Google Maps directions URL.
+    stops = list of address strings (waypoints in order)
+    final_destination = the last stop
+    All stops including final are passed in order.
+    """
+    if not stops and not final_destination:
         return None
-    base  = "https://www.google.com/maps/dir/"
-    parts = [quote_plus(s) for s in stops]
-    parts.append(quote_plus(destination))
-    return base + "/".join(parts)
+
+    base = "https://www.google.com/maps/dir/?api=1"
+
+    all_points = list(stops) + ([final_destination] if final_destination else [])
+
+    if len(all_points) == 0:
+        return None
+    elif len(all_points) == 1:
+        return (base + "&destination="
+                + quote_plus(all_points[0]))
+    else:
+        origin      = quote_plus(all_points[0])
+        destination = quote_plus(all_points[-1])
+        waypoints   = "|".join(quote_plus(p) for p in all_points[1:-1])
+
+        url = (base
+               + "&origin="      + origin
+               + "&destination=" + destination)
+        if waypoints:
+            url += "&waypoints=" + waypoints
+        url += "&travelmode=driving"
+        return url
+
+
 
 
 @app.cli.command("create-db")
